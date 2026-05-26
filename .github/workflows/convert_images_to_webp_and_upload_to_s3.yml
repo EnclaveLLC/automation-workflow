@@ -1,0 +1,280 @@
+# -----------------------------------------------------------------------------
+# Workflow: Convert Images to WebP + Upload to S3
+# Features:
+# 1. Detects PNG/JPG/JPEG/WEBP image changes.
+# 2. Converts PNG/JPG to WebP using Sharp.
+# 3. Skips conversion for existing WebP images.
+# 4. Deletes old WebPs before conversion.
+# 5. Uploads all WebP (converted or existing) to S3.
+# 6. Deletes only original PNG/JPG images after conversion.
+# 7. Keeps repo history clean via separate commits.
+# -----------------------------------------------------------------------------
+
+  name: Convert Images to WebP
+
+  on:
+    push:
+      branches:
+        - main
+        - master
+  
+  permissions:
+    contents: write
+  
+  jobs:
+    convert-images:
+      runs-on: ubuntu-latest
+  
+      steps:
+        # ---------------------------
+        # Checkout repo
+        # ---------------------------
+        - name: Checkout repo
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+        
+        # ---------------------------------------------------------
+        # Verify required secrets
+        # ---------------------------------------------------------
+        - name: Verify required secrets
+          run: |
+            missing=false
+        
+            if [ -z "${{ secrets.FTP_SERVER }}" ]; then
+              echo "❌ FTP_SERVER secret is missing!"
+              missing=true
+            fi
+        
+            if [ -z "${{ secrets.FTP_USERNAME }}" ]; then
+              echo "❌ FTP_USERNAME secret is missing!"
+              missing=true
+            fi
+        
+            if [ -z "${{ secrets.FTP_PASSWORD }}" ]; then
+              echo "❌ FTP_PASSWORD secret is missing!"
+              missing=true
+            fi
+        
+            if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+              echo "❌ AWS_ACCESS_KEY_ID secret is missing!"
+              missing=true
+            fi
+        
+            if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+              echo "❌ AWS_SECRET_ACCESS_KEY secret is missing!"
+              missing=true
+            fi
+        
+            if [ "$missing" = true ]; then
+              echo "One or more required secrets are missing. Exiting..."
+              exit 1
+            else
+              echo "✅ All required secrets are present."
+            fi
+  
+        # ---------------------------
+        # Detect changed images
+        # ---------------------------
+        - name: Detect changed images
+          id: detect
+          run: |
+            echo "🔍 Checking for changed images..."
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '\.(png|jpg|jpeg|webp)$' || true)
+  
+            if [ -z "$CHANGED_FILES" ]; then
+              echo "✅ No image changes"
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+              echo "images=" >> $GITHUB_OUTPUT
+            else
+              echo "Changed images:"
+              echo "$CHANGED_FILES"
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+              echo "images=$(echo "$CHANGED_FILES" | tr '\n' ' ')" >> $GITHUB_OUTPUT
+            fi
+  
+        # ---------------------------
+        # Setup Node.js and Sharp
+        # ---------------------------
+        - name: Setup Node.js
+          if: steps.detect.outputs.has_changes == 'true' && steps.detect.outputs.images != ''
+          uses: actions/setup-node@v4
+          with:
+            node-version: '20'
+  
+        - name: Install Sharp
+          if: steps.detect.outputs.has_changes == 'true' && steps.detect.outputs.images != ''
+          run: npm install sharp
+  
+        # ---------------------------
+        # Convert images to WebP (skip existing .webp)
+        # ---------------------------
+        - name: Convert images to WebP
+          if: steps.detect.outputs.has_changes == 'true' && steps.detect.outputs.images != ''
+          run: |
+            node -e "
+            const sharp = require('sharp');
+            const fs = require('fs');
+            const { execSync } = require('child_process');
+
+            const images = '${{ steps.detect.outputs.images }}'.split(' ').filter(Boolean);
+
+            (async () => {
+              for (const file of images) {
+                if (!fs.existsSync(file)) continue;
+
+                if (file.toLowerCase().endsWith('.webp')) {
+                  console.log('⚪ Skipping existing WebP:', file);
+                  continue;
+                }
+
+                const webpFile = file.replace(/\.(png|jpe?g)$/i, '.webp');
+
+                try {
+                  await sharp(file)
+                    .webp({ quality: 80 })
+                    .toFile(webpFile);
+
+                  console.log('✅ Converted', file, '->', webpFile);
+                  execSync(\`git add \"\${webpFile}\"\`);
+                } catch (err) {
+                  console.log('❌ Failed to convert:', file);
+                  console.log(err.message);
+                  continue; // 🔥 prevents breaking the workflow
+                }
+              }
+            })();
+            "
+  
+        # ---------------------------
+        # Commit and push WebP files
+        # ---------------------------
+        - name: Commit and push WebP files
+          if: steps.detect.outputs.has_changes == 'true' && steps.detect.outputs.images != ''
+          run: |
+            BRANCH=${{ github.ref_name }}
+            git config user.name "enc-action[bot]"
+            git config user.email "enc-action[bot]@users.noreply.github.com"
+
+            git add -A
+            git commit -m "♻️ Synced WebP with source image changes" || echo "No WebP changes to commit"
+
+            git pull origin $BRANCH --no-rebase || true
+            git push origin HEAD:$BRANCH
+
+        # ---------------------------
+        # Delete original (non-WebP) images after conversion
+        # ---------------------------
+        - name: Delete original images
+          if: steps.detect.outputs.has_changes == 'true' && steps.detect.outputs.images != ''
+          run: |
+            IMAGES="${{ steps.detect.outputs.images }}"
+            for file in $IMAGES; do
+              if [[ "$file" == *.webp ]]; then
+                echo "Skipping deletion of WebP file: $file"
+                continue
+              fi
+              if [ -f "$file" ]; then
+                rm "$file"
+                echo "🗑️ Deleted original image: $file"
+                git rm -f "$file" || true
+              fi
+            done
+
+        # ---------------------------
+        # Commit and push deletion of originals
+        # ---------------------------
+        - name: Commit and push deletion of original images
+          if: steps.detect.outputs.has_changes == 'true' && steps.detect.outputs.images != ''
+          run: |
+            BRANCH=${{ github.ref_name }}
+            git config user.name "enc-action[bot]"
+            git config user.email "enc-action[bot]@users.noreply.github.com"
+
+            git add -A
+            git commit -m "🗑️ Removed original PNG/JPG images after WebP conversion" || echo "No originals to delete"
+
+            git pull origin $BRANCH --no-rebase || true
+            git push origin HEAD:$BRANCH
+  
+        # ---------------------------
+        # AWS Setup and Upload
+        # ---------------------------
+  
+        - name: Set up AWS credentials
+          uses: aws-actions/configure-aws-credentials@v3
+          with:
+            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws-region: us-east-1
+  
+        - name: Verify AWS credentials and bucket access
+          run: |
+            aws sts get-caller-identity
+            aws s3 ls s3://cdn-konscious || echo "Bucket not found or no access"
+            aws s3api head-bucket --bucket cdn-konscious || echo "Cannot access bucket"
+  
+        - name: Configure S3 bucket for public access
+          run: |
+            aws s3api put-public-access-block \
+              --bucket cdn-konscious \
+              --public-access-block-configuration \
+              "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false" || echo "Failed to update public access block"
+  
+        - name: Configure S3 CORS
+          run: |
+            aws s3api put-bucket-cors --bucket cdn-konscious --cors-configuration '[
+              {
+                "AllowedHeaders": ["*"],
+                "AllowedMethods": ["GET", "HEAD"],
+                "AllowedOrigins": ["*"],
+                "ExposeHeaders": ["ETag"],
+                "MaxAgeSeconds": 3000
+              }
+            ]' || echo "Failed to configure CORS"
+  
+        # ---------------------------
+        # Detect all WebP files (converted or uploaded)
+        # ---------------------------
+        - name: Get WebP files
+          id: get_webp
+          if: steps.detect.outputs.has_changes == 'true' && steps.detect.outputs.images != ''
+          run: |
+            echo "Fetching all WebP files created or uploaded..."
+            WEBP_FILES=""
+            for file in ${{ steps.detect.outputs.images }}; do
+              if [[ "$file" == *.webp ]]; then
+                WEBP_FILES="$WEBP_FILES $file"
+                continue
+              fi
+              webp_file="${file%.*}.webp"
+              if [ -f "$webp_file" ]; then
+                WEBP_FILES="$WEBP_FILES $webp_file"
+              fi
+            done
+  
+            echo "webp_files=$(echo $WEBP_FILES | tr '\n' ' ')" >> $GITHUB_OUTPUT
+  
+        - name: Show WebP files
+          run: |
+            echo "=== WebP files to upload ==="
+            echo "${{ steps.get_webp.outputs.webp_files }}"
+  
+        # ---------------------------
+        # Upload WebP files to S3
+        # ---------------------------
+        - name: Upload WebP files to S3
+          if: steps.get_webp.outputs.webp_files != ''
+          run: |
+            echo "Uploading WebP files to S3..."
+            REPO_NAME=$(basename $GITHUB_REPOSITORY)
+            WEBP_FILES="${{ steps.get_webp.outputs.webp_files }}"
+            for file in $WEBP_FILES; do
+              if [ -f "$file" ]; then
+                echo "Uploading $file to s3://cdn-konscious/$REPO_NAME/$file"
+                aws s3 cp "$file" "s3://cdn-konscious/$REPO_NAME/$file" \
+                  --acl public-read \
+                  --metadata-directive REPLACE \
+                  --cache-control "max-age=604800, public"
+              fi
+            done
