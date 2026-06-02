@@ -66,7 +66,6 @@ async function run() {
         type: "test",
         attributes: {
           url: URL,
-          report: "none",
           video: 0,
           retention: 1
         }
@@ -99,13 +98,35 @@ async function run() {
 
     if (state === "completed") {
 
-      const attrs = result.data.attributes;
+      console.log("GTmetrix test completed");
+
+      const reportId = result.data.attributes?.report
+        || result.data.links?.report?.split("/").pop();
+
+      if (!reportId) {
+        console.error("Could not find report ID in test response");
+        process.exit(1);
+      }
+
+      const report = await request("GET", `/api/2.0/reports/${reportId}`);
+
+      const attrs = report.data.attributes;
 
       console.log("");
       console.log("GTMETRIX RESULTS");
-      console.log(`Grade: ${attrs.grade}`);
+      console.log(`Grade: ${attrs.gtmetrix_grade}`);
       console.log(`Performance: ${attrs.performance_score}`);
       console.log(`Structure: ${attrs.structure_score}`);
+
+      const today = new Date().toISOString().slice(0, 10);
+
+      console.log("RESULT_JSON:" + JSON.stringify({
+        url: URL,
+        date: today,
+        grade: attrs.gtmetrix_grade,
+        performance: attrs.performance_score,
+        structure: attrs.structure_score
+      }));
 
       if (attrs.performance_score < 90) {
         process.exit(1);

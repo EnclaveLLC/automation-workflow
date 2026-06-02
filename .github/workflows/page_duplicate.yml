@@ -1,0 +1,176 @@
+name: Page Duplicate
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  page-duplicate:
+    if: "github.event.label.name == 'Page Duplicate'"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    env:
+      BRANCH_NAME: update-vslfb-v12-cta-links-${{ github.run_id }}
+
+    steps:
+
+      # ── Step 0 · Sync with default branch (MANDATORY FIRST STEP) ───────────
+      - name: Checkout and sync default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest changes
+        run: |
+          set -euo pipefail
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          echo "Default branch: $DEFAULT_BRANCH"
+          git pull origin "$DEFAULT_BRANCH"
+
+      # ── Step 2 · Create working branch ─────────────────────────────────────
+      - name: Create branch
+        run: |
+          set -euo pipefail
+          if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
+            echo "ERROR: Branch '$BRANCH_NAME' already exists on remote." \
+                 "Delete it before re-running this workflow."
+            exit 1
+          fi
+          git checkout -b "$BRANCH_NAME"
+          echo "Created branch: $BRANCH_NAME"
+
+      # ── Step 3 · Parse issue body ───────────────────────────────────────────
+      - name: Parse issue body
+        id: parse
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: node scripts/page_duplicate/parse-issue.js
+
+      # ── Step 4 · Duplicate folder ───────────────────────────────────────────
+      - name: Debug paths
+        run: |
+          pwd
+          ls -la
+          ls -la pages
+
+      - name: Duplicate folder
+        id: duplicate
+        env:
+          REF_PATH: ${{ steps.parse.outputs.ref_path }}
+          DUPLICATE_PATH: ${{ steps.parse.outputs.duplicate_path }}
+        run: |
+          set -euo pipefail
+          # Strip any leading slash to ensure paths are repo-relative
+          REF_PATH="${REF_PATH#/}"
+          DUPLICATE_PATH="${DUPLICATE_PATH#/}"
+          mkdir -p "$DUPLICATE_PATH"
+          cp -R "$REF_PATH/." "$DUPLICATE_PATH"
+          echo "duplicate_path=$DUPLICATE_PATH" >> "$GITHUB_OUTPUT"
+
+      # ── Step 5 · Detect index file ──────────────────────────────────────────
+      - name: Detect index file
+        id: detect_index
+        env:
+          DUPLICATE_PATH: ${{ steps.duplicate.outputs.duplicate_path }}
+        run: |
+          set -euo pipefail
+          if [ -f "$DUPLICATE_PATH/index.html" ]; then
+            echo "index_file=index.html" >> "$GITHUB_OUTPUT"
+            echo "Detected: index.html"
+          elif [ -f "$DUPLICATE_PATH/index.php" ]; then
+            echo "index_file=index.php" >> "$GITHUB_OUTPUT"
+            echo "Detected: index.php"
+          else
+            echo "ERROR: No index.html or index.php found in $DUPLICATE_PATH"
+            exit 1
+          fi
+
+      # ── Step 6 · Apply dynamic CTA replacements ─────────────────────────────
+      - name: Apply CTA replacements
+        env:
+          REPLACE_MAP: ${{ steps.parse.outputs.replace_map }}
+          DUPLICATE_PATH: ${{ steps.duplicate.outputs.duplicate_path }}
+          INDEX_FILE: ${{ steps.detect_index.outputs.index_file }}
+        run: node scripts/page_duplicate/apply-replacements.js
+
+
+      # ── Configure git identity ──────────────────────────────────────────────
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # ── Commit ──────────────────────────────────────────────────────────────
+      - name: Commit changes
+        run: |
+          set -euo pipefail
+          git add .
+          git commit -m "Update CTA links for v12 page"
+
+      # ── Push branch ─────────────────────────────────────────────────────────
+      - name: Push branch
+        run: |
+          set -euo pipefail
+          git push -u origin "$BRANCH_NAME"
+
+      # ── Create pull request ─────────────────────────────────────────────────
+      - name: Create pull request
+        id: create_pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GTMETRIX_URLS: ${{ steps.parse.outputs.gtmetrix_urls }}
+        run: |
+          set -euo pipefail
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+          REPO="${{ github.repository }}"
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+
+          GTMETRIX_LIST=$(echo "$GTMETRIX_URLS" | sed '/./s/^/- /')
+
+          cat > /tmp/pr_body.md << PREOF
+          Summary:
+          - Page duplicated successfully
+          - Dynamic CTA replacements applied
+          - PR created
+
+          ## GTMetrix Test URLs
+          ${GTMETRIX_LIST}
+
+          ## Issue
+          https://github.com/${REPO}/issues/${ISSUE_NUMBER}
+          PREOF
+
+          PR_URL=$(gh pr create \
+            --base  "$DEFAULT_BRANCH" \
+            --head  "$BRANCH_NAME" \
+            --title "Update v12 VSLFB CTA links" \
+            --body-file /tmp/pr_body.md)
+
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo "Created PR: $PR_URL"
+
+      # ── Post-PR issue comment ───────────────────────────────────────────────
+      - name: Comment on issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ steps.create_pr.outputs.pr_url }}
+        run: |
+          set -euo pipefail
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+
+          cat > /tmp/issue_comment.md << CMEOF
+          Summary:
+          - Page duplicated successfully
+          - Dynamic CTA replacements applied
+          - PR created
+
+          PR: ${PR_URL}
+          CMEOF
+
+          gh issue comment "$ISSUE_NUMBER" --body-file /tmp/issue_comment.md

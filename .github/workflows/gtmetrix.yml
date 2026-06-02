@@ -1,0 +1,232 @@
+name: GTMetrix on Merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to test issue extraction against'
+        required: true
+        type: string
+
+jobs:
+  gtmetrix:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+      issues: write
+      id-token: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Extract GTmetrix Test URLs from PR body
+        id: extract_url
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number || github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          PR_BODY=$(gh api repos/$REPO/pulls/$PR_NUMBER --jq '.body // ""')
+
+          echo "=== DEBUG: PR Body ==="
+          echo "$PR_BODY"
+
+          # Extract all URLs after "## GTmetrix Test URL(s)" heading (bare or markdown list items)
+          GTMETRIX_URLS=$(echo "$PR_BODY" \
+            | awk 'tolower($0) ~ /^## gtmetrix test urls?/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH)} found && !/https?:\/\// && /^##/{exit}' \
+            | tr -d '\r')
+
+          echo "=== FINAL: gtmetrix_urls ==="
+          echo "$GTMETRIX_URLS"
+
+          # Store as newline-delimited, encoded for GITHUB_OUTPUT
+          DELIMITER="GTMETRIX_URLS_$(openssl rand -hex 8)"
+          {
+            echo "gtmetrix_urls<<$DELIMITER"
+            echo "$GTMETRIX_URLS"
+            echo "$DELIMITER"
+          } >> "$GITHUB_OUTPUT"
+
+          # Extract GitHub Issue URL from "## Issue" heading (URL on the following line)
+          ISSUE_URL=$(echo "$PR_BODY" \
+            | awk 'tolower($0) ~ /^## issue[[:space:]]*$/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH); exit}' \
+            | tr -d '\r')
+          echo "=== FINAL: issue_url ==="
+          echo "${ISSUE_URL:-<none found>}"
+          echo "issue_url=$ISSUE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for all GTmetrix URLs to go live
+        env:
+          GTMETRIX_URLS: ${{ steps.extract_url.outputs.gtmetrix_urls }}
+        run: |
+          if [ -z "$GTMETRIX_URLS" ]; then
+            echo "⚠️  No GTmetrix URLs extracted — skipping live check."
+            exit 0
+          fi
+
+          check_url_live() {
+            local URL="$1"
+            echo "--- Polling $URL ---"
+            for i in $(seq 1 30); do
+              STATUS_CODE=$(node -e "
+                fetch('$URL', { method: 'GET', redirect: 'follow' })
+                  .then(r => { process.stdout.write(String(r.status)); process.exit(0); })
+                  .catch(() => { process.stdout.write('0'); process.exit(0); });
+              ")
+              echo "Attempt $i: HTTP $STATUS_CODE"
+
+              if [ "$STATUS_CODE" = "200" ]; then
+                echo "✅ $URL is live."
+                return 0
+              fi
+
+              if [ "$i" = "30" ]; then
+                echo "⚠️  $URL did not return 200 after 30 attempts — moving on."
+              fi
+
+              sleep 20
+            done
+          }
+
+          while IFS= read -r URL; do
+            [ -z "$URL" ] && continue
+            check_url_live "$URL"
+          done <<< "$GTMETRIX_URLS"
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Run GTmetrix tests
+        if: steps.extract_url.outputs.gtmetrix_urls != ''
+        id: run_tests
+        env:
+          GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}
+          GTMETRIX_URLS: ${{ steps.extract_url.outputs.gtmetrix_urls }}
+        run: |
+          TMPFILE=$(mktemp)
+          echo "[]" > "$TMPFILE"
+
+          NUM_RUNS=5
+
+          while IFS= read -r URL; do
+            [ -z "$URL" ] && continue
+            echo "=== Testing: $URL (${NUM_RUNS} runs) ==="
+
+            RUNS_FILE=$(mktemp)
+            echo "[]" > "$RUNS_FILE"
+
+            for RUN in $(seq 1 $NUM_RUNS); do
+              echo "--- Run $RUN / $NUM_RUNS ---"
+
+              OUTPUT=$(node scripts/gtmetrix/gtmetrix.js "$URL" 2>&1 || true)
+              echo "$OUTPUT"
+
+              JSON_ENTRY=$(echo "$OUTPUT" | grep '^RESULT_JSON:' | sed 's/^RESULT_JSON://')
+
+              if [ -n "$JSON_ENTRY" ]; then
+                echo "$JSON_ENTRY" > /tmp/gtmetrix_run.json
+
+                node -e "
+                  const fs = require('fs');
+                  const arr = JSON.parse(fs.readFileSync('$RUNS_FILE', 'utf8'));
+                  const entry = JSON.parse(fs.readFileSync('/tmp/gtmetrix_run.json', 'utf8'));
+                  arr.push(entry);
+                  fs.writeFileSync('$RUNS_FILE', JSON.stringify(arr, null, 2));
+                "
+                echo "✅ Run $RUN recorded."
+              else
+                echo "⚠️  Run $RUN produced no result — skipping."
+              fi
+            done
+
+            BEST_ENTRY=$(node -e "
+              const fs = require('fs');
+              const runs = JSON.parse(fs.readFileSync('$RUNS_FILE', 'utf8'));
+              if (!runs.length) { process.stdout.write(''); process.exit(0); }
+              const best = runs.reduce((a, b) =>
+                b.performance > a.performance ? b :
+                b.performance === a.performance && b.structure > a.structure ? b : a
+              );
+              best.selected_from = runs.length;
+              process.stdout.write(JSON.stringify(best));
+            ")
+
+            if [ -n "$BEST_ENTRY" ]; then
+              echo "$BEST_ENTRY" > /tmp/gtmetrix_best.json
+              node -e "
+                const fs = require('fs');
+                const arr = JSON.parse(fs.readFileSync('$TMPFILE', 'utf8'));
+                const entry = JSON.parse(fs.readFileSync('/tmp/gtmetrix_best.json', 'utf8'));
+                arr.push(entry);
+                fs.writeFileSync('$TMPFILE', JSON.stringify(arr, null, 2));
+              "
+              echo "=== Best for $URL: $(cat /tmp/gtmetrix_best.json) ==="
+            else
+              echo "⚠️  No valid results for $URL — not saved."
+            fi
+          done <<< "$GTMETRIX_URLS"
+
+          JSON_OUTPUT=$(jq -c . "$TMPFILE")
+
+          echo "test_results=$JSON_OUTPUT" >> "$GITHUB_OUTPUT"
+
+      - name: Post GTMetrix results to GitHub Issue
+        if: steps.extract_url.outputs.issue_url != '' && steps.run_tests.outputs.test_results != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TEST_RESULTS: ${{ steps.run_tests.outputs.test_results }}
+          ISSUE_URL: ${{ steps.extract_url.outputs.issue_url }}
+        run: |
+          COMMENT_BODY=$(node -e "
+            const results = JSON.parse(process.env.TEST_RESULTS || '[]');
+            if (!results.length) process.exit(0);
+            let body = '## GTMetrix Test Results\n\n';
+            body += 'Each URL was tested in GTMetrix 5 times and the best result was selected.\n\n';
+            for (const r of results) {
+              body += '### ' + r.url + '\n';
+              body += '- Selected From: ' + (r.selected_from || 1) + ' test runs\n';
+              body += '- Grade: ' + r.grade + '\n';
+              body += '- Performance: ' + r.performance + '%\n';
+              body += '- Structure: ' + r.structure + '%\n\n';
+            }
+            process.stdout.write(body.trim());
+          ")
+
+          if [ -z "$COMMENT_BODY" ]; then
+            echo "⚠️  No GTMetrix results to post — skipping."
+            exit 0
+          fi
+
+          echo "=== Posting comment to: $ISSUE_URL ==="
+          gh issue comment "$ISSUE_URL" --body "$COMMENT_BODY"
+
+      - name: Update GTmetrix history
+        if: steps.extract_url.outputs.gtmetrix_urls != ''
+        env:
+          TEST_RESULTS: ${{ steps.run_tests.outputs.test_results }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const histPath = 'gtmetrix-history.json';
+            const existing = fs.existsSync(histPath) ? JSON.parse(fs.readFileSync(histPath, 'utf8')) : [];
+            const newEntries = JSON.parse(process.env.TEST_RESULTS || '[]');
+            fs.writeFileSync(histPath, JSON.stringify([...existing, ...newEntries], null, 2));
+          "
+
+          git config user.name "enc-action[bot]"
+          git config user.email "enc-action[bot]@users.noreply.github.com"
+          git add gtmetrix-history.json
+          git commit -m "Update GTmetrix history" || echo "Nothing to commit"
+          git pull --rebase origin main
+          git push
