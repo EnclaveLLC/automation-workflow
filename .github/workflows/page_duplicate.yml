@@ -10,6 +10,7 @@ on:
 
 jobs:
   page-duplicate:
+    name: Initialize Page Duplicate
     runs-on: ubuntu-latest
     permissions:
       contents: write
