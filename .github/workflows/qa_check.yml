@@ -101,7 +101,7 @@ jobs:
               if [ "$size" -ge 1048576 ]; then
                 CHECK1_FAILED=true
                 QA_PASSED=false
-                CHECK1_FILES="* ${CHECK1_FILES}${file#./} \n"
+                CHECK1_FILES="${CHECK1_FILES}- ${file#./} \n"
               fi
             fi
           done <<< "$CHANGED"
