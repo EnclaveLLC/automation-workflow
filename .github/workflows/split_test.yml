@@ -1,0 +1,16 @@
+name: Split Test
+
+on:
+  workflow_call:
+    inputs:
+      issue_number:
+        description: "Issue number that triggered this workflow"
+        required: true
+        type: number
+
+jobs:
+  hello-world:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hello World
+        run: echo "Hello, World!"
