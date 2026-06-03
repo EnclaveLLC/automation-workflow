@@ -35,9 +35,22 @@ Instead of duplicating workflow files across repositories, all repositories refe
 ```text
 .github/
 └── workflows/
+    ├── aws_deploy.yml
     ├── claude.yml
     ├── ftp_deploy.yml
-    ├── convert_images_to_webp.yml
+    ├── gtmetrix.yml
+    ├── page_duplicate.yml
+    ├── qa_check.yml
+    ├── slack.yml
+    └── split_test.yml
+prompts/
+└── claude-system-prompt.md
 scripts/
-    ├── gtmetrix.js
-    ├── replace-img.js
+├── ftp_deploy/
+│   └── replace-img.js
+├── gtmetrix/
+│   └── gtmetrix.js
+└── page_duplicate/
+    ├── apply-replacements.js
+    ├── parse-issue.js
+    └── verify.js
