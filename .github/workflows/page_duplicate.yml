@@ -48,6 +48,14 @@ jobs:
           git checkout -b "$BRANCH_NAME"
           echo "Created branch: $BRANCH_NAME"
 
+      # ── Step 2.5 · Checkout automation scripts ─────────────────────────────
+      - name: Checkout automation-workflow
+        uses: actions/checkout@v4
+        with:
+          repository: EnclaveLLC/automation-workflow
+          path: EnclaveLLC/automation-workflow
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       # ── Step 3 · Parse issue body ───────────────────────────────────────────
       - name: Parse issue body
         id: parse
