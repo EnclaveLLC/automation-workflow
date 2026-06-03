@@ -126,13 +126,13 @@
         - name: Checkout automation-workflow scripts
           uses: actions/checkout@v3
           with:
-            repository: dankonscious/automation-workflow
-            path: dankonscious/automation-workflow
+            repository: EnclaveLLC/automation-workflow
+            path: EnclaveLLC/automation-workflow
 
         - name: Replace <img> src using Node
           env:
             REPO_NAME: ${{ github.event.repository.name }}
-          run: node dankonscious/automation-workflow/scripts/ftp_deploy/replace-img.js
+          run: node EnclaveLLC/automation-workflow/scripts/ftp_deploy/replace-img.js
 
         # ---------------------------------------------------------
         # Commit changes (if any)
