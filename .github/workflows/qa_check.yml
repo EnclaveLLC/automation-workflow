@@ -42,6 +42,8 @@ jobs:
           BEFORE="${{ github.event.before }}"
           AFTER=$(git rev-parse HEAD)
 
+          echo "$BEFORE"
+
           # Get all files touched between original push base and current HEAD
           if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             CHANGED_FILES=$(git ls-tree -r --name-only "$AFTER")
