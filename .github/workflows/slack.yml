@@ -11,7 +11,7 @@ on:
         required: true
         type: string
 
-jobs:
+jobs: 
   notify:
     runs-on: ubuntu-latest
 
