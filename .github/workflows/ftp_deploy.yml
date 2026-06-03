@@ -4,18 +4,17 @@
   name: FTP Deploy
 
   on:
-    push:
-      branches:
-        - main
-        - master
-  
+    workflow_call:
+
   permissions:
     contents: write
-  
+
   jobs:
-    deploy:
+    check-changes:
       runs-on: ubuntu-latest
-  
+      outputs:
+        has_changes: ${{ steps.uploadcheck.outputs.has_changes }}
+
       steps:
         # ---------------------------------------------------------
         # Checkout code
@@ -24,39 +23,62 @@
           uses: actions/checkout@v3
           with:
             fetch-depth: 0
-        
+
+        # ---------------------------------------------------------
+        # Check for uploadable file changes
+        # ---------------------------------------------------------
+        - name: Check for uploadable file changes
+          id: uploadcheck
+          run: |
+            CHANGED=$(git diff --name-only --diff-filter=AM ${{ github.event.before }} ${{ github.sha }} \
+              | grep -E '\.(html|php|css|js|htaccess|txt)$' || true)
+
+            if [ -z "$CHANGED" ]; then
+              echo "⚠️ No uploadable files (.html, .php, .css, .js, .htaccess, .txt) were modified or created. Skipping deploy."
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+            else
+              echo "✅ Uploadable files detected:"
+              echo "$CHANGED"
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+            fi
+
+    deploy:
+      name: Initialize FTP Deploy
+      needs: check-changes
+      if: needs.check-changes.outputs.has_changes == 'true'
+      runs-on: ubuntu-latest
+
+      steps:
+        # ---------------------------------------------------------
+        # Checkout code
+        # ---------------------------------------------------------
+        - name: Checkout code
+          uses: actions/checkout@v3
+          with:
+            fetch-depth: 0
+
         # ---------------------------------------------------------
         # Verify required secrets
         # ---------------------------------------------------------
         - name: Verify required secrets
           run: |
             missing=false
-        
+
             if [ -z "${{ secrets.FTP_SERVER }}" ]; then
               echo "❌ FTP_SERVER secret is missing!"
               missing=true
             fi
-        
+
             if [ -z "${{ secrets.FTP_USERNAME }}" ]; then
               echo "❌ FTP_USERNAME secret is missing!"
               missing=true
             fi
-        
+
             if [ -z "${{ secrets.FTP_PASSWORD }}" ]; then
               echo "❌ FTP_PASSWORD secret is missing!"
               missing=true
             fi
-        
-            if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
-              echo "❌ AWS_ACCESS_KEY_ID secret is missing!"
-              missing=true
-            fi
-        
-            if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
-              echo "❌ AWS_SECRET_ACCESS_KEY secret is missing!"
-              missing=true
-            fi
-        
+
             if [ "$missing" = true ]; then
               echo "One or more required secrets are missing. Exiting..."
               exit 1
@@ -72,13 +94,13 @@
           run: |
             ROOT_CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} \
               | grep -E '^(index\.html|index\.php)$' || true)
-  
+
             if [ -n "$ROOT_CHANGED" ]; then
               echo "root_changed=true" >> $GITHUB_OUTPUT
             else
               echo "root_changed=false" >> $GITHUB_OUTPUT
             fi
-  
+
         # ---------------------------------------------------------
         # Detect changed folders inside /pages
         # ---------------------------------------------------------
@@ -89,7 +111,7 @@
               | grep '^pages/' \
               | cut -d/ -f2 \
               | sort -u)
-  
+
             if [ -z "$FOLDERS" ]; then
               echo "pages_changed=false" >> $GITHUB_OUTPUT
             else
@@ -97,14 +119,20 @@
               echo "pages_changed=true" >> $GITHUB_OUTPUT
               echo "folders=$(echo $FOLDERS | tr '\n' ' ')" >> $GITHUB_OUTPUT
             fi
-  
+
         # ---------------------------------------------------------
         # Replace <img> src in ROOT files
         # ---------------------------------------------------------
+        - name: Checkout automation-workflow scripts
+          uses: actions/checkout@v3
+          with:
+            repository: dankonscious/automation-workflow
+            path: dankonscious/automation-workflow
+
         - name: Replace <img> src using Node
           env:
             REPO_NAME: ${{ github.event.repository.name }}
-          run: node ./scripts/ftp_deploy/replace-img.js
+          run: node dankonscious/automation-workflow/scripts/ftp_deploy/replace-img.js
 
         # ---------------------------------------------------------
         # Commit changes (if any)
@@ -115,13 +143,13 @@
             REPO_NAME=${{ github.event.repository.name }}
             git config user.name "enc-action[bot]"
             git config user.email "enc-action[bot]@users.noreply.github.com"
-  
+
             git add -A
             git commit -m "♻️ Update img src tag to CDN path https://d3j6ngx7p7lglj.cloudfront.net/{REPO_NAME}" || echo "No changes to commit"
 
             git pull origin $BRANCH --no-rebase || true
             git push origin HEAD:$BRANCH
-            
+
         # ---------------------------------------------------------
         # Re-checkout latest commit to ensure FTP sees updated files
         # ---------------------------------------------------------
@@ -131,7 +159,7 @@
           with:
             ref: ${{ github.ref_name }}
             fetch-depth: 0
-  
+
         # ---------------------------------------------------------
         # Deploy Updated Files to FTP
         # ---------------------------------------------------------

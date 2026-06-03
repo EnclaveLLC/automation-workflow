@@ -1,4 +1,4 @@
-name: GTMetrix on Merge
+name: GT Metrix
 
 on:
   pull_request:

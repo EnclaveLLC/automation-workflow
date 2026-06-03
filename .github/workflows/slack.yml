@@ -1,0 +1,101 @@
+# -----------------------------------------------------------------------------
+# Workflow: Slack Notification (QA Failure)
+# -----------------------------------------------------------------------------
+name: Slack Notify
+
+on:
+  workflow_call:
+    inputs:
+      message:
+        description: "Failure details to include in the notification"
+        required: true
+        type: string
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Lookup Slack ID from sheet
+        id: lookup
+        env:
+          EMAIL: ${{ github.event.head_commit.author.email }}
+        run: |
+          cat > /tmp/lookup.mjs << 'SCRIPT'
+          import { appendFileSync } from 'fs';
+
+          const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQd2Io9yJUDOcrorTOsKHAGubWN-E3IKWutj8jXcRNmqipsqSeIZCPgsAoB_iuMFAnJK_Iwj795SReL/pub?gid=1765465231&single=true&output=csv';
+
+          const res = await fetch(SHEET_URL);
+          const csv = await res.text();
+
+          const email = (process.env.EMAIL || '').toLowerCase();
+          const lines = csv.trim().split('\n');
+          const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
+          const emailCol = headers.findIndex(h => h.includes('email'));
+          const slackCol = headers.findIndex(h => h.includes('slack'));
+
+          let slackId = '';
+          for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+            if (emailCol >= 0 && cols[emailCol] && cols[emailCol].toLowerCase() === email) {
+              slackId = slackCol >= 0 ? (cols[slackCol] || '') : '';
+              break;
+            }
+          }
+
+          appendFileSync(process.env.GITHUB_OUTPUT, `slack_id=${slackId}\n`);
+          console.log(slackId ? `Found Slack ID: ${slackId}` : `No Slack ID found for ${email}`);
+          SCRIPT
+          node /tmp/lookup.mjs
+
+      - name: Send Slack notification
+        env:
+          MESSAGE: ${{ inputs.message }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          EMAIL: ${{ github.event.head_commit.author.email }}
+          SLACK_ID: ${{ steps.lookup.outputs.slack_id }}
+          SECRET: ${{ secrets.SLACK_BOT_TOKEN }}
+        run: |
+          REPO_URL="https://github.com/${REPO}"
+          COMMIT_URL="https://github.com/${REPO}/commit/${SHA}"
+
+          if [ -n "$SLACK_ID" ]; then
+            COMMITTER="<@${SLACK_ID}>"
+          else
+            COMMITTER="$EMAIL"
+          fi
+
+          PAYLOAD=$(jq -n \
+            --arg channel "#automation-workflows" \
+            --arg repo_url "$REPO_URL" \
+            --arg repo "$REPO" \
+            --arg branch "$BRANCH" \
+            --arg commit_url "$COMMIT_URL" \
+            --arg sha "${SHA:0:7}" \
+            --arg committer "$COMMITTER" \
+            --arg msg "$MESSAGE" \
+            '{
+                channel: $channel,
+                text:
+                  ("*QA Check Failed*\n\n" +
+                  "*Repository:* <" + $repo_url + "|" + $repo + ">\n" +
+                  "*Branch:* " + $branch + "\n" +
+                  "*Commit:* <" + $commit_url + "|" + $sha + ">\n" +
+                  "*Committed by:* " + $committer + "\n\n" +
+                  "*Failures:*\n" + $msg + "\n\n" +
+                  "Fix the issue to receive $100 credit towards your next invoice! 🎉")
+            }')
+
+          echo "$PAYLOAD"
+
+          RESPONSE=$(curl -s \
+            -X POST "https://slack.com/api/chat.postMessage" \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          echo "Slack response: $RESPONSE"
+          echo "$RESPONSE" | jq -e '.ok == true' || exit 1
