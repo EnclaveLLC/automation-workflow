@@ -7,6 +7,10 @@ on:
         description: "Issue number that triggered this workflow"
         required: true
         type: number
+      type:
+        description: "Split test action ('on' or 'off')"
+        required: true
+        type: string
 
 jobs:
   hello-world:
