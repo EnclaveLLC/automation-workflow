@@ -25,7 +25,6 @@ function isSeparatorRow(line) {
 
 let ref_url = '';
 let new_url = '';
-let gtmetrix_url = '';
 const cta_links = [];      // [{ label, url }]
 const replace_mapping = []; // [{ old, new }]
 
@@ -94,6 +93,8 @@ if (!ref_url || !new_url) {
   process.exit(1);
 }
 
+const gtmetrix_urls = `${ref_url}\n${new_url}`;
+
 // Format: '1 pack' => url
 const ctaFormatted = cta_links
   .map(({ label, url }) => `'${label.toLowerCase()}' => ${url}`)
@@ -103,7 +104,9 @@ const outputFile = process.env.GITHUB_OUTPUT || '';
 const out = [
   `ref_url=${ref_url}`,
   `new_url=${new_url}`,
-  `gtmetrix_url=${gtmetrix_url}`,
+  'gtmetrix_urls<<GTEOF',
+  gtmetrix_urls,
+  'GTEOF',
   'cta_links<<CTAEOF',
   ctaFormatted,
   'CTAEOF',
@@ -117,6 +120,6 @@ if (outputFile) fs.appendFileSync(outputFile, out);
 
 console.log(`ref_url:         ${ref_url}`);
 console.log(`new_url:         ${new_url}`);
-console.log(`gtmetrix_url:    ${gtmetrix_url}`);
+console.log(`gtmetrix_urls:\n${gtmetrix_urls}`);
 console.log(`cta_links:\n${ctaFormatted}`);
 console.log(`replace_mapping: ${JSON.stringify(replace_mapping)}`);
