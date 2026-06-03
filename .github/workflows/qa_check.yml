@@ -56,36 +56,31 @@ jobs:
           IMAGE_EXTS="jpg jpeg png gif webp svg ico avif bmp tiff"
           WEB_EXTS="html htm php css js ts json xml txt md scss less htaccess map yaml yml mp4"
 
-          CHANGED_DIRS=$(echo "$CHANGED" | while IFS= read -r f; do dirname "$f"; done | sort -u)
-
           # ------------------------------------------------------------------
           # Check 1: Every image file must be smaller than 1MB
           # ------------------------------------------------------------------
           CHECK1_FAILED=false
           CHECK1_FILES=""
-          while IFS= read -r dir; do
-            [ -z "$dir" ] && continue
-            [ ! -d "$dir" ] && continue
-            while IFS= read -r file; do
-              [ -z "$file" ] && continue
-              ext="${file##*.}"
-              ext="${ext,,}"
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            [ ! -f "$file" ] && continue
+            ext="${file##*.}"
+            ext="${ext,,}"
 
-              is_image=false
-              for img_ext in $IMAGE_EXTS; do
-                [ "$ext" = "$img_ext" ] && is_image=true && break
-              done
+            is_image=false
+            for img_ext in $IMAGE_EXTS; do
+              [ "$ext" = "$img_ext" ] && is_image=true && break
+            done
 
-              if [ "$is_image" = true ]; then
-                size=$(stat -c%s "$file")
-                if [ "$size" -ge 1048576 ]; then
-                  CHECK1_FAILED=true
-                  QA_PASSED=false
-                  CHECK1_FILES="${CHECK1_FILES}${file#./}, "
-                fi
+            if [ "$is_image" = true ]; then
+              size=$(stat -c%s "$file")
+              if [ "$size" -ge 1048576 ]; then
+                CHECK1_FAILED=true
+                QA_PASSED=false
+                CHECK1_FILES="${CHECK1_FILES}${file#./}, "
               fi
-            done < <(find "$dir" -type f ! -name '.*')
-          done <<< "$CHANGED_DIRS"
+            fi
+          done <<< "$CHANGED"
           [ "$CHECK1_FAILED" = true ] && FAILURES="${FAILURES}Check 1: Image size exceeded 1MB — ${CHECK1_FILES%, }\n"
 
           # ------------------------------------------------------------------
@@ -93,30 +88,27 @@ jobs:
           # ------------------------------------------------------------------
           CHECK2_FAILED=false
           CHECK2_FILES=""
-          while IFS= read -r dir; do
-            [ -z "$dir" ] && continue
-            [ ! -d "$dir" ] && continue
-            while IFS= read -r file; do
-              [ -z "$file" ] && continue
-              base=$(basename "$file")
-              [[ "$base" == .* ]] && continue
-              [[ "$base" != *.* ]] && continue
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            [ ! -f "$file" ] && continue
+            base=$(basename "$file")
+            [[ "$base" == .* ]] && continue
+            [[ "$base" != *.* ]] && continue
 
-              ext="${base##*.}"
-              ext="${ext,,}"
+            ext="${base##*.}"
+            ext="${ext,,}"
 
-              is_valid=false
-              for valid_ext in $IMAGE_EXTS $WEB_EXTS; do
-                [ "$ext" = "$valid_ext" ] && is_valid=true && break
-              done
+            is_valid=false
+            for valid_ext in $IMAGE_EXTS $WEB_EXTS; do
+              [ "$ext" = "$valid_ext" ] && is_valid=true && break
+            done
 
-              if [ "$is_valid" = false ]; then
-                CHECK2_FAILED=true
-                QA_PASSED=false
-                CHECK2_FILES="${CHECK2_FILES}${file#./}, "
-              fi
-            done < <(find "$dir" -type f ! -name '.*')
-          done <<< "$CHANGED_DIRS"
+            if [ "$is_valid" = false ]; then
+              CHECK2_FAILED=true
+              QA_PASSED=false
+              CHECK2_FILES="${CHECK2_FILES}${file#./}, "
+            fi
+          done <<< "$CHANGED"
           [ "$CHECK2_FAILED" = true ] && FAILURES="${FAILURES}Check 2: Unrecognized file extension — ${CHECK2_FILES%, }\n"
 
           # ------------------------------------------------------------------

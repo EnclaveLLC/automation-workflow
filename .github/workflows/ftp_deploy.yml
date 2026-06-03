@@ -37,7 +37,7 @@ jobs:
       - name: Check for uploadable file changes
         id: uploadcheck
         run: |
-          CHANGED=$(git diff --name-only --diff-filter=AM ${{ github.event.before }} ${{ github.sha }} \
+          CHANGED=$(git diff --name-only --diff-filter=AMD ${{ github.event.before }} ${{ github.sha }} \
             | grep -E '\.(html|php|css|js|htaccess|txt)$' || true)
 
           if [ -z "$CHANGED" ]; then
