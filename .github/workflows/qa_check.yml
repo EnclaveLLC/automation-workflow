@@ -101,11 +101,11 @@ jobs:
               if [ "$size" -ge 1048576 ]; then
                 CHECK1_FAILED=true
                 QA_PASSED=false
-                CHECK1_FILES="${CHECK1_FILES}${file#./}, "
+                CHECK1_FILES="* ${CHECK1_FILES}${file#./} \n"
               fi
             fi
           done <<< "$CHANGED"
-          [ "$CHECK1_FAILED" = true ] && FAILURES="${FAILURES}Check 1: Image size exceeded 1MB — ${CHECK1_FILES%, }\n"
+          [ "$CHECK1_FAILED" = true ] && FAILURES="${FAILURES}Check 1: Image size exceeded 1MB \n ${CHECK1_FILES%, }\n\n"
 
           # ------------------------------------------------------------------
           # Check 2: Every web file must have a recognized extension
