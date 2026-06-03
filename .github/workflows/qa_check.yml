@@ -49,7 +49,24 @@ jobs:
             CHANGED_FILES=$(git diff --name-only --diff-filter=AMD "$BEFORE" "$AFTER")
           fi
 
-          CHANGED="$CHANGED_FILES"
+          # Extract unique parent folders from changed files
+          FOLDERS=$(echo "$CHANGED_FILES" | while IFS= read -r f; do
+            [ -n "$f" ] && dirname "$f"
+          done | sort -u)
+
+          echo "Affected folders:"
+          echo "$FOLDERS"
+          echo "---"
+
+          # Collect all existing files from every affected folder
+          CHANGED=$(echo "$FOLDERS" | while IFS= read -r folder; do
+            [ -z "$folder" ] && continue
+            if [ "$folder" = "." ]; then
+              find "." -maxdepth 1 -type f | sed 's|^\./||'
+            elif [ -d "$folder" ]; then
+              find "$folder" -type f
+            fi
+          done | sort -u)
 
           echo "Files to validate:"
           echo "$CHANGED"
