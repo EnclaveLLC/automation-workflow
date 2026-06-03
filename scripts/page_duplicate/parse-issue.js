@@ -95,6 +95,9 @@ if (!ref_url || !new_url) {
 
 const gtmetrix_urls = `${ref_url}\n${new_url}`;
 
+const ref_path = new URL(ref_url).pathname.replace(/^\//, '');
+const duplicate_path = new URL(new_url).pathname.replace(/^\//, '');
+
 // Format: '1 pack' => url
 const ctaFormatted = cta_links
   .map(({ label, url }) => `'${label.toLowerCase()}' => ${url}`)
@@ -104,6 +107,8 @@ const outputFile = process.env.GITHUB_OUTPUT || '';
 const out = [
   `ref_url=${ref_url}`,
   `new_url=${new_url}`,
+  `ref_path=${ref_path}`,
+  `duplicate_path=${duplicate_path}`,
   'gtmetrix_urls<<GTEOF',
   gtmetrix_urls,
   'GTEOF',
@@ -120,6 +125,8 @@ if (outputFile) fs.appendFileSync(outputFile, out);
 
 console.log(`ref_url:         ${ref_url}`);
 console.log(`new_url:         ${new_url}`);
+console.log(`ref_path:        ${ref_path}`);
+console.log(`duplicate_path:  ${duplicate_path}`);
 console.log(`gtmetrix_urls:\n${gtmetrix_urls}`);
 console.log(`cta_links:\n${ctaFormatted}`);
 console.log(`replace_mapping: ${JSON.stringify(replace_mapping)}`);
