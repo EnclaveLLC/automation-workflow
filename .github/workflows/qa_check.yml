@@ -36,15 +36,44 @@ jobs:
       - name: Run QA checks
         id: qa
         run: |
-          BEFORE="${{ github.event.before }}"
-          AFTER="${{ github.sha }}"
+          # Pull latest so AFTER includes any bot commits (e.g. WebP conversion from aws_deploy)
+          git pull origin ${{ github.ref_name }} --no-rebase --quiet
 
-          # Determine which folders were affected by the original push
+          BEFORE="${{ github.event.before }}"
+          AFTER=$(git rev-parse HEAD)
+
+          # Get all files touched between original push base and current HEAD
           if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-            CHANGED=$(git ls-tree -r --name-only "$AFTER")
+            CHANGED_FILES=$(git ls-tree -r --name-only "$AFTER")
           else
-            CHANGED=$(git diff --name-only --diff-filter=AM "$BEFORE" "$AFTER")
+            CHANGED_FILES=$(git diff --name-only --diff-filter=AMD "$BEFORE" "$AFTER")
           fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          echo "---"
+
+          # Extract unique parent folders from changed files
+          FOLDERS=$(echo "$CHANGED_FILES" | xargs -I{} dirname {} | sort -u)
+
+          echo "Affected folders:"
+          echo "$FOLDERS"
+          echo "---"
+
+          # Expand each affected folder to all current files inside it
+          CHANGED=""
+          while IFS= read -r folder; do
+            [ -z "$folder" ] && continue
+            if [ "$folder" = "." ]; then
+              FILES=$(find "." -maxdepth 1 -type f | sed 's|^\./||')
+            else
+              [ ! -d "$folder" ] && continue
+              FILES=$(find "$folder" -type f | sed 's|^\./||')
+            fi
+            CHANGED=$(printf '%s\n%s' "$CHANGED" "$FILES")
+          done <<< "$FOLDERS"
+
+          CHANGED=$(echo "$CHANGED" | grep -v '^$' | sort -u)
 
           echo "Files to validate:"
           echo "$CHANGED"
