@@ -27,9 +27,16 @@ jobs:
       actions: read
 
     steps:
-      - name: Checkout repository
+      - name: Checkout caller repository
         uses: actions/checkout@v4
         with:
+          fetch-depth: 1
+
+      - name: Checkout automation-workflow (scripts)
+        uses: actions/checkout@v4
+        with:
+          repository: EnclaveLLC/automation-workflow
+          path: EnclaveLLC/automation-workflow
           fetch-depth: 1
 
       - name: Extract GTmetrix Test URLs from PR body
