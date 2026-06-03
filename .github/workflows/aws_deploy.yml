@@ -297,3 +297,62 @@ jobs:
                 --cache-control "max-age=604800, public"
             fi
           done
+
+      # ---------------------------
+      # Sync images from S3
+      # ---------------------------
+      - name: Sync images from S3
+        run: |
+          REPO_NAME=$(basename $GITHUB_REPOSITORY)
+
+          # Get unique parent folders from image files touched in this push
+          FOLDERS=$(git diff --name-only --no-renames \
+            ${{ github.event.before }} ${{ github.sha }} \
+            | grep -iE '\.(webp|png|jpg|jpeg|gif|avif)$' \
+            | while IFS= read -r f; do [ -n "$f" ] && dirname "$f"; done \
+            | sort -u)
+
+          if [ -z "$FOLDERS" ]; then
+            echo "No image folders changed. Skipping sync."
+            exit 0
+          fi
+
+          echo "Syncing folders:"
+          echo "$FOLDERS"
+          echo "---"
+
+          while IFS= read -r folder; do
+            [ -z "$folder" ] && continue
+            echo "--- Checking folder: $folder ---"
+
+            # Images currently in repo folder (post-conversion state)
+            REPO_IMAGES=$(find "$folder" -maxdepth 1 -type f \
+              | grep -iE '\.(webp|png|jpg|jpeg|gif|avif)$' \
+              | sed 's|^\./||' \
+              | sort)
+
+            # Images currently in the matching S3 folder
+            S3_IMAGES=$(aws s3 ls "s3://cdn-konscious/$REPO_NAME/$folder/" \
+              | awk '{print $4}' \
+              | grep -iE '\.(webp|png|jpg|jpeg|gif|avif)$' \
+              | sort || true)
+
+            if [ -z "$S3_IMAGES" ]; then
+              echo "No images found in S3 for $folder. Skipping."
+              continue
+            fi
+
+            # Delete S3 images that no longer exist in the repo folder
+            while IFS= read -r s3_file; do
+              [ -z "$s3_file" ] && continue
+              repo_path="$folder/$s3_file"
+              if ! echo "$REPO_IMAGES" | grep -qF "$repo_path"; then
+                echo "🗑️ $repo_path not in repo — deleting from S3"
+                aws s3 rm "s3://cdn-konscious/$REPO_NAME/$repo_path" \
+                  || echo "⚠️ Failed to delete: $repo_path"
+              else
+                echo "✅ $repo_path in sync"
+              fi
+            done <<< "$S3_IMAGES"
+
+          done <<< "$FOLDERS"
