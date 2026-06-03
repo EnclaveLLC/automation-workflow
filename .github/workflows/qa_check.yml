@@ -18,7 +18,7 @@ on:
         description: "Summary of which checks failed"
         value: ${{ jobs.qa-check.outputs.failure_message }}
 
-jobs:
+jobs: 
   qa-check:
     name: QA Validation
     runs-on: ubuntu-latest
