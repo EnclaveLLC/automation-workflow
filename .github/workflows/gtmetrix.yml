@@ -1,21 +1,23 @@
 name: GT Metrix
 
 on:
-  pull_request:
-    types: [closed]
-    branches:
-      - main
-      - master
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      pr_number:
-        description: 'PR number to test issue extraction against'
+      gtmetrix_url:
+        description: 'GTmetrix URL to test'
         required: true
         type: string
+      issue_url:
+        description: 'Issue URL to post results to'
+        required: false
+        type: string
+    secrets:
+      GTMETRIX_API_KEY:
+        required: true
 
 jobs:
   gtmetrix:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    if: inputs.gtmetrix_url != '' && inputs.issue_url != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -33,24 +35,15 @@ jobs:
       - name: Extract GTmetrix Test URLs from PR body
         id: extract_url
         env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number || github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
+          INPUT_GTMETRIX_URL: ${{ inputs.gtmetrix_url }}
+          INPUT_ISSUE_URL: ${{ inputs.issue_url }}
         run: |
-          PR_BODY=$(gh api repos/$REPO/pulls/$PR_NUMBER --jq '.body // ""')
-
-          echo "=== DEBUG: PR Body ==="
-          echo "$PR_BODY"
-
-          # Extract all URLs after "## GTmetrix Test URL(s)" heading (bare or markdown list items)
-          GTMETRIX_URLS=$(echo "$PR_BODY" \
-            | awk 'tolower($0) ~ /^## gtmetrix test urls?/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH)} found && !/https?:\/\// && /^##/{exit}' \
-            | tr -d '\r')
+          GTMETRIX_URLS="$INPUT_GTMETRIX_URL"
+          ISSUE_URL="$INPUT_ISSUE_URL"
 
           echo "=== FINAL: gtmetrix_urls ==="
           echo "$GTMETRIX_URLS"
 
-          # Store as newline-delimited, encoded for GITHUB_OUTPUT
           DELIMITER="GTMETRIX_URLS_$(openssl rand -hex 8)"
           {
             echo "gtmetrix_urls<<$DELIMITER"
@@ -58,10 +51,6 @@ jobs:
             echo "$DELIMITER"
           } >> "$GITHUB_OUTPUT"
 
-          # Extract GitHub Issue URL from "## Issue" heading (URL on the following line)
-          ISSUE_URL=$(echo "$PR_BODY" \
-            | awk 'tolower($0) ~ /^## issue[[:space:]]*$/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH); exit}' \
-            | tr -d '\r')
           echo "=== FINAL: issue_url ==="
           echo "${ISSUE_URL:-<none found>}"
           echo "issue_url=$ISSUE_URL" >> "$GITHUB_OUTPUT"
