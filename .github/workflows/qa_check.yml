@@ -48,7 +48,7 @@ jobs:
           if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             CHANGED_FILES=$(git ls-tree -r --name-only "$AFTER")
           else
-            CHANGED_FILES=$(git diff --name-only --diff-filter=AMD "$BEFORE" "$AFTER")
+            CHANGED_FILES=$(git diff --name-only --diff-filter=AMD --no-renames "$BEFORE" "$AFTER")
           fi
 
           # Extract unique parent folders from changed files
