@@ -102,13 +102,22 @@ jobs:
             exit 1
           fi
 
-      # ── Step 6 · Apply dynamic CTA replacements ─────────────────────────────
-      - name: Apply CTA replacements
+      # ── Step 6 · Apply replacements ────────────────────────────────────────
+      - name: Build CTA pairs
+        id: cta_pairs
         env:
-          REPLACE_MAP: ${{ steps.parse.outputs.replace_map }}
-          DUPLICATE_PATH: ${{ steps.duplicate.outputs.duplicate_path }}
-          INDEX_FILE: ${{ steps.detect_index.outputs.index_file }}
-        run: node EnclaveLLC/automation-workflow/scripts/page_duplicate/apply-replacements.js
+          SAMCART_LINKS_FILE: constant-files/samcart-links.json
+          CTA_LINKS: ${{ steps.parse.outputs.cta_links }}
+        run: node EnclaveLLC/automation-workflow/scripts/page_duplicate/build_cta_pairs.js
+
+      - name: Apply replacements
+        env:
+          FILE_PATH: ${{ steps.duplicate.outputs.duplicate_path }}/${{ steps.detect_index.outputs.index_file }}
+          REPLACE_MAPPING: ${{ steps.parse.outputs.replace_mapping }}
+          CTA_PAIRS: ${{ steps.cta_pairs.outputs.pairs }}
+        run: |
+          export PAIRS="${REPLACE_MAPPING}"$'\n'"${CTA_PAIRS}"
+          node EnclaveLLC/automation-workflow/scripts/general/search_replace.js
 
 
       # ── Configure git identity ──────────────────────────────────────────────
