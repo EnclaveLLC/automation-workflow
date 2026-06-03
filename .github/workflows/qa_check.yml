@@ -19,7 +19,6 @@ on:
         value: ${{ jobs.qa-check.outputs.failure_message }}
 
 jobs:
-
   qa-check:
     name: QA Validation
     runs-on: ubuntu-latest
