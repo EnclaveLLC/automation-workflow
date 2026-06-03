@@ -118,7 +118,7 @@ jobs:
             for RUN in $(seq 1 $NUM_RUNS); do
               echo "--- Run $RUN / $NUM_RUNS ---"
 
-              OUTPUT=$(node scripts/gtmetrix/gtmetrix.js "$URL" 2>&1 || true)
+              OUTPUT=$(node EnclaveLLC/automation-workflow/scripts/gtmetrix/gtmetrix.js "$URL" 2>&1 || true)
               echo "$OUTPUT"
 
               JSON_ENTRY=$(echo "$OUTPUT" | grep '^RESULT_JSON:' | sed 's/^RESULT_JSON://')
