@@ -9,8 +9,84 @@ on:
         type: number
 
 jobs:
+  # ── Job 1: Parse issue body ─────────────────────────────────────────────────
+  parse-issue:
+    name: Parse Issue Body
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    outputs:
+      ref_path:        ${{ steps.parse.outputs.ref_path }}
+      duplicate_path:  ${{ steps.parse.outputs.duplicate_path }}
+      cta_links:       ${{ steps.parse.outputs.cta_links }}
+      gtmetrix_urls:   ${{ steps.parse.outputs.gtmetrix_urls }}
+      replace_mapping: ${{ steps.parse.outputs.replace_mapping }}
+      comment_id:      ${{ steps.progress_comment.outputs.comment_id }}
+
+    steps:
+      - name: Comment page duplication in progress
+        id: progress_comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COMMENT_URL=$(gh issue comment "${{ inputs.issue_number }}" \
+            --repo "${{ github.repository }}" \
+            --body "🔄 Page duplication is now in progress...")
+          COMMENT_ID=$(echo "$COMMENT_URL" | grep -oE '[0-9]+$')
+          echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout automation-workflow
+        uses: actions/checkout@v4
+        with:
+          repository: EnclaveLLC/automation-workflow
+          path: EnclaveLLC/automation-workflow
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Parse issue body
+        id: parse
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: node EnclaveLLC/automation-workflow/scripts/page_duplicate/parse-issue.js
+
+  # ── Job 2: Verify duplicate path does not already exist ───────────────────
+  check-duplicate-path:
+    name: Check Duplicate Path
+    needs: parse-issue
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout and fetch latest
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest changes
+        run: git pull origin ${{ github.event.repository.default_branch }}
+
+      - name: Check if duplicate path already exists
+        env:
+          GH_TOKEN:       ${{ secrets.GITHUB_TOKEN }}
+          DUPLICATE_PATH: ${{ needs.parse-issue.outputs.duplicate_path }}
+          COMMENT_ID:     ${{ needs.parse-issue.outputs.comment_id }}
+        run: |
+          DUPLICATE_PATH="${DUPLICATE_PATH#/}"
+          if [ -e "$DUPLICATE_PATH" ]; then
+            gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+              -X PATCH \
+              -f body="❌ Page duplication aborted: the path \`${DUPLICATE_PATH}\` already exists in the repository. Please choose a different path."
+            echo "Error: '$DUPLICATE_PATH' already exists."
+            exit 1
+          fi
+          echo "✅ Path '$DUPLICATE_PATH' is available. Proceeding."
+
+  # ── Job 3: Duplicate page and create PR ────────────────────────────────────
   page-duplicate:
     name: Initialize Page Duplicate
+    needs: [parse-issue, check-duplicate-path]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -22,7 +98,7 @@ jobs:
 
     steps:
 
-      # ── Step 0 · Sync with default branch (MANDATORY FIRST STEP) ───────────
+      # ── Sync with default branch ─────────────────────────────────────────────
       - name: Checkout and sync default branch
         uses: actions/checkout@v4
         with:
@@ -37,7 +113,7 @@ jobs:
           echo "Default branch: $DEFAULT_BRANCH"
           git pull origin "$DEFAULT_BRANCH"
 
-      # ── Step 2 · Create working branch ─────────────────────────────────────
+      # ── Create working branch ────────────────────────────────────────────────
       - name: Create branch
         run: |
           set -euo pipefail
@@ -49,7 +125,7 @@ jobs:
           git checkout -b "$BRANCH_NAME"
           echo "Created branch: $BRANCH_NAME"
 
-      # ── Step 2.5 · Checkout automation scripts ─────────────────────────────
+      # ── Checkout automation scripts ──────────────────────────────────────────
       - name: Checkout automation-workflow
         uses: actions/checkout@v4
         with:
@@ -57,14 +133,7 @@ jobs:
           path: EnclaveLLC/automation-workflow
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── Step 3 · Parse issue body ───────────────────────────────────────────
-      - name: Parse issue body
-        id: parse
-        env:
-          ISSUE_BODY: ${{ github.event.issue.body }}
-        run: node EnclaveLLC/automation-workflow/scripts/page_duplicate/parse-issue.js
-
-      # ── Step 4 · Duplicate folder ───────────────────────────────────────────
+      # ── Duplicate folder ─────────────────────────────────────────────────────
       - name: Debug paths
         run: |
           pwd
@@ -74,18 +143,17 @@ jobs:
       - name: Duplicate folder
         id: duplicate
         env:
-          REF_PATH: ${{ steps.parse.outputs.ref_path }}
-          DUPLICATE_PATH: ${{ steps.parse.outputs.duplicate_path }}
+          REF_PATH:       ${{ needs.parse-issue.outputs.ref_path }}
+          DUPLICATE_PATH: ${{ needs.parse-issue.outputs.duplicate_path }}
         run: |
           set -euo pipefail
-          # Strip any leading slash to ensure paths are repo-relative
           REF_PATH="${REF_PATH#/}"
           DUPLICATE_PATH="${DUPLICATE_PATH#/}"
           mkdir -p "$DUPLICATE_PATH"
           cp -R "$REF_PATH/." "$DUPLICATE_PATH"
           echo "duplicate_path=$DUPLICATE_PATH" >> "$GITHUB_OUTPUT"
 
-      # ── Step 5 · Detect index file ──────────────────────────────────────────
+      # ── Detect index file ────────────────────────────────────────────────────
       - name: Detect index file
         id: detect_index
         env:
@@ -103,49 +171,46 @@ jobs:
             exit 1
           fi
 
-      # ── Step 6 · Apply replacements ────────────────────────────────────────
+      # ── Apply replacements ───────────────────────────────────────────────────
       - name: Build CTA pairs
         id: cta_pairs
         env:
           SAMCART_LINKS_FILE: constant-files/samcart-links.json
-          CTA_LINKS: ${{ steps.parse.outputs.cta_links }}
+          CTA_LINKS: ${{ needs.parse-issue.outputs.cta_links }}
         run: node EnclaveLLC/automation-workflow/scripts/page_duplicate/build_cta_pairs.js
 
       - name: Apply replacements
         env:
-          FILE_PATH: ${{ steps.duplicate.outputs.duplicate_path }}/${{ steps.detect_index.outputs.index_file }}
-          REPLACE_MAPPING: ${{ steps.parse.outputs.replace_mapping }}
-          CTA_PAIRS: ${{ steps.cta_pairs.outputs.pairs }}
+          FILE_PATH:       ${{ steps.duplicate.outputs.duplicate_path }}/${{ steps.detect_index.outputs.index_file }}
+          REPLACE_MAPPING: ${{ needs.parse-issue.outputs.replace_mapping }}
+          CTA_PAIRS:       ${{ steps.cta_pairs.outputs.pairs }}
         run: |
           export PAIRS="${REPLACE_MAPPING}"$'\n'"${CTA_PAIRS}"
           node EnclaveLLC/automation-workflow/scripts/general/search_replace.js
 
-
-      # ── Configure git identity ──────────────────────────────────────────────
+      # ── Commit and push ──────────────────────────────────────────────────────
       - name: Configure git identity
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # ── Commit ──────────────────────────────────────────────────────────────
       - name: Commit changes
         run: |
           set -euo pipefail
           git add .
           git commit -m "Update CTA links for v12 page"
 
-      # ── Push branch ─────────────────────────────────────────────────────────
       - name: Push branch
         run: |
           set -euo pipefail
           git push -u origin "$BRANCH_NAME"
 
-      # ── Create pull request ─────────────────────────────────────────────────
+      # ── Create pull request ──────────────────────────────────────────────────
       - name: Create pull request
         id: create_pr
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GTMETRIX_URLS: ${{ steps.parse.outputs.gtmetrix_urls }}
+          GH_TOKEN:      ${{ secrets.GITHUB_TOKEN }}
+          GTMETRIX_URLS: ${{ needs.parse-issue.outputs.gtmetrix_urls }}
         run: |
           set -euo pipefail
           ISSUE_NUMBER="${{ inputs.issue_number }}"
@@ -176,14 +241,14 @@ jobs:
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
           echo "Created PR: $PR_URL"
 
-      # ── Post-PR issue comment ───────────────────────────────────────────────
+      # ── Comment on issue ─────────────────────────────────────────────────────
       - name: Comment on issue
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_URL: ${{ steps.create_pr.outputs.pr_url }}
+          GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
+          PR_URL:     ${{ steps.create_pr.outputs.pr_url }}
+          COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
         run: |
           set -euo pipefail
-          ISSUE_NUMBER="${{ inputs.issue_number }}"
 
           cat > /tmp/issue_comment.md << CMEOF
           Summary:
@@ -194,4 +259,6 @@ jobs:
           PR: ${PR_URL}
           CMEOF
 
-          gh issue comment "$ISSUE_NUMBER" --body-file /tmp/issue_comment.md
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$(cat /tmp/issue_comment.md)"
