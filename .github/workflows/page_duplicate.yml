@@ -94,7 +94,7 @@ jobs:
       pull-requests: write
 
     env:
-      BRANCH_NAME: update-vslfb-v12-cta-links-${{ github.run_id }}
+      BRANCH_NAME: ${{ github.event.issue.title && format('{0}-{1}', github.event.issue.title, github.run_id) || github.run_id }}
 
     steps:
 
@@ -198,7 +198,7 @@ jobs:
         run: |
           set -euo pipefail
           git add .
-          git commit -m "Update CTA links for v12 page"
+          git commit -m "${{ github.event.issue.title }}"
 
       - name: Push branch
         run: |
