@@ -253,12 +253,13 @@ jobs:
           set -euo pipefail
 
           cat > /tmp/issue_comment.md << CMEOF
-          Summary:
+          ### Summary:
           - Page duplicated successfully
           - Dynamic CTA replacements applied
           - PR created
 
-          PR: ${PR_URL}
+          The duplicated page is now available in PR to review: 
+          ${PR_URL}
           CMEOF
 
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
