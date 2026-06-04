@@ -24,40 +24,8 @@ permissions:
   contents: write
 
 jobs:
-  check-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      has_images: ${{ steps.check_images.outputs.has_images }}
-
-    steps:
-      # ---------------------------
-      # Checkout repo
-      # ---------------------------
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # ---------------------------------------------------------
-      # Check for image changes — end workflow early if none
-      # ---------------------------------------------------------
-      - name: Check for image changes
-        id: check_images
-        run: |
-          CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '\.(png|jpg|jpeg|webp)$' || true)
-          if [ -z "$CHANGED" ]; then
-            echo "No image changes detected in this push. Skipping deploy."
-            echo "has_images=false" >> $GITHUB_OUTPUT
-          else
-            echo "✅ Image changes detected:"
-            echo "$CHANGED"
-            echo "has_images=true" >> $GITHUB_OUTPUT
-          fi
-
   convert-images:
     name: Initialize Image Conversion and Upload
-    needs: check-changes
-    if: needs.check-changes.outputs.has_images == 'true'
     runs-on: ubuntu-latest
 
     steps:
