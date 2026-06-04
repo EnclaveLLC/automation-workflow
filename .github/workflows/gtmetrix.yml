@@ -24,16 +24,10 @@ jobs:
       actions: read
 
     steps:
-      - name: Checkout caller repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Checkout automation-workflow (scripts)
+      - name: Checkout automation-workflow
         uses: actions/checkout@v4
         with:
           repository: EnclaveLLC/automation-workflow
-          path: EnclaveLLC/automation-workflow
           fetch-depth: 1
 
       - name: Extract GTmetrix Test URLs from PR body
@@ -122,7 +116,7 @@ jobs:
             for RUN in $(seq 1 $NUM_RUNS); do
               echo "--- Run $RUN / $NUM_RUNS ---"
 
-              OUTPUT=$(node EnclaveLLC/automation-workflow/scripts/gtmetrix/gtmetrix.js "$URL" 2>&1 || true)
+              OUTPUT=$(node ./scripts/gtmetrix/gtmetrix.js "$URL" 2>&1 || true)
               echo "$OUTPUT"
 
               JSON_ENTRY=$(echo "$OUTPUT" | grep '^RESULT_JSON:' | sed 's/^RESULT_JSON://')

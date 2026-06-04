@@ -73,11 +73,11 @@ async function run() {
     }
   );
 
-  const testId = create.data.id;
+  const testId = create?.data?.id;
 
   if (!testId) {
     console.error("Failed to create GTmetrix test");
-    console.error(create);
+    console.error(JSON.stringify(create, null, 2));
     process.exit(1);
   }
 
@@ -92,7 +92,7 @@ async function run() {
       `/api/2.0/tests/${testId}`
     );
 
-    const state = result.data.attributes.state;
+    const state = result?.data?.attributes?.state;
 
     console.log(`Status: ${state}`);
 
