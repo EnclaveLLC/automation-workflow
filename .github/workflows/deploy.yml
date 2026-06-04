@@ -192,7 +192,7 @@ jobs:
 
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$(printf '### Deploy completed\n\n%s\n%s' "$FTP_STATUS" "$AWS_STATUS")"
+            -f body="$(printf '### Deployment completed\n\n%s\n%s' "$FTP_STATUS" "$AWS_STATUS")"
 
   # ---------------------------------------------------------------------------
   # Job 4a: GTmetrix performance check (runs after deploys)
