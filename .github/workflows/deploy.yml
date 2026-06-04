@@ -1,0 +1,168 @@
+# -----------------------------------------------------------------------------
+# Workflow: Deploy (Reusable)
+# Steps:
+#   1a. FTP deploy     ─┐ parallel
+#   1b. AWS deploy     ─┘
+#   2.  PR Info (runs after both deploys)
+#   3a. GTmetrix check ─┐ parallel (after PR Info)
+#   3b. QA check       ─┘
+#   4.  If QA fails → notify Slack
+# -----------------------------------------------------------------------------
+name: Deploy
+
+on:
+  workflow_call:
+    secrets:
+      FTP_SERVER:
+        required: true
+      FTP_USERNAME:
+        required: true
+      FTP_PASSWORD:
+        required: true
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      GTMETRIX_API_KEY:
+        required: true
+      SLACK_BOT_TOKEN:
+        required: true
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Job 1a: Deploy via FTP
+  # ---------------------------------------------------------------------------
+  deploy-ftp:
+    name: FTP Deploy
+    uses: ./.github/workflows/ftp_deploy.yml
+    permissions:
+      contents: write
+    secrets:
+      FTP_SERVER: ${{ secrets.FTP_SERVER }}
+      FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+
+  # ---------------------------------------------------------------------------
+  # Job 1b: Deploy to AWS (runs in parallel with deploy-ftp)
+  # ---------------------------------------------------------------------------
+  deploy-aws:
+    name: AWS Deploy
+    uses: ./.github/workflows/aws_deploy.yml
+    permissions:
+      contents: write
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Detect if push originated from a merged PR and echo its body
+  # ---------------------------------------------------------------------------
+  fetching-info:
+    name: Fetch Info
+    needs: [deploy-ftp, deploy-aws]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      gtmetrix_url: ${{ steps.extract.outputs.gtmetrix_url }}
+      issue_url: ${{ steps.extract.outputs.issue_url }}
+    steps:
+      - name: Fetch PR body if push is from a merged PR
+        id: extract
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_DATA=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+            --jq '.[0] // empty')
+
+          if [ -z "$PR_DATA" ]; then
+            echo "This push was not associated with a pull request."
+          else
+            PR_NUMBER=$(echo "$PR_DATA" | jq -r '.number')
+            PR_BODY=$(echo "$PR_DATA" | jq -r '.body // ""')
+            echo "Push originated from PR #${PR_NUMBER}"
+            echo "-------- PR Body --------"
+            echo "$PR_BODY"
+            echo "-------------------------"
+
+            GTMETRIX_URLS=$(echo "$PR_BODY" \
+              | awk 'tolower($0) ~ /^## gtmetrix test urls?/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH)} found && !/https?:\/\// && /^##/{exit}' \
+              | tr -d '\r')
+
+            FIRST_ISSUE=$(echo "$PR_BODY" \
+              | awk 'tolower($0) ~ /^## issue[[:space:]]*$/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH); exit}' \
+              | tr -d '\r')
+
+            if [ -n "$GTMETRIX_URLS" ]; then
+              echo "---- GTmetrix URLs ----"
+              echo "$GTMETRIX_URLS"
+              DELIMITER="GTMETRIX_$(openssl rand -hex 8)"
+              {
+                echo "gtmetrix_url<<$DELIMITER"
+                echo "$GTMETRIX_URLS"
+                echo "$DELIMITER"
+              } >> "$GITHUB_OUTPUT"
+            else
+              echo "No GTmetrix URLs found in PR body."
+            fi
+
+            if [ -n "$FIRST_ISSUE" ]; then
+              echo "----- Issue URL ------"
+              echo "$FIRST_ISSUE"
+              echo "issue_url=${FIRST_ISSUE}" >> "$GITHUB_OUTPUT"
+            else
+              echo "No issue URL found in PR body."
+            fi
+            echo "-------------------------"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Job 3a: GTmetrix performance check (runs after PR Info)
+  # ---------------------------------------------------------------------------
+  gtmetrix:
+    name: GTmetrix Check
+    needs: [fetching-info]
+    if: needs.fetching-info.outputs.gtmetrix_url != '' && needs.fetching-info.outputs.issue_url != ''
+    permissions:
+      actions: read
+      contents: write
+      issues: write
+      pull-requests: read
+      id-token: write
+    uses: ./.github/workflows/gtmetrix.yml
+    with:
+      gtmetrix_url: ${{ needs.fetching-info.outputs.gtmetrix_url }}
+      issue_url: ${{ needs.fetching-info.outputs.issue_url }}
+    secrets:
+      GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}
+
+  # ---------------------------------------------------------------------------
+  # Job 3b: QA Validation (runs after PR Info)
+  # ---------------------------------------------------------------------------
+  qa-check:
+    name: QA Validation
+    needs: [fetching-info]
+    uses: ./.github/workflows/qa_check.yml
+    with:
+      issue_url: ${{ needs.fetching-info.outputs.issue_url }}
+    permissions:
+      contents: read
+
+  # ---------------------------------------------------------------------------
+  # Job 5: Notify Slack if QA failed
+  # ---------------------------------------------------------------------------
+  notify-failure:
+    name: Notify Slack on Failure
+    needs: qa-check
+    if: needs.qa-check.outputs.qa_passed == 'false'
+    uses: ./.github/workflows/slack.yml
+    permissions:
+      contents: write
+    with:
+      message: ${{ needs.qa-check.outputs.failure_message }}
+    secrets:
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
