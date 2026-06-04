@@ -36,7 +36,7 @@ jobs:
           ISSUE_NUMBER=$(echo "${{ inputs.issue_url }}" | grep -oE '[0-9]+$')
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \
             -X POST \
-            -f body="🔄 GTmetrix tests are in progress..." \
+            -f body="### <img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> GTmetrix Test Status" \
             --jq '.id')
           echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
 
@@ -135,15 +135,15 @@ jobs:
             local CURRENT_URL="$1"
             local RUN_NUM="$2"
             [ -z "$COMMENT_ID" ] && return
-            local BODY="### 🔄 GTmetrix tests are in progress...\n\n"
+            local BODY="### <img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> GTmetrix Test Status\n\n"
             while IFS= read -r U; do
               [ -z "$U" ] && continue
               if printf '%s' "$COMPLETED_URLS" | grep -qF "$U"; then
-                BODY="${BODY}- ${U} ✅ Completed\n"
+                BODY="${BODY}• ${U}\n  Status: ✅ Completed\n\n"
               elif [ "$U" = "$CURRENT_URL" ]; then
-                BODY="${BODY}- ${U} Test Progress ${RUN_NUM}/${NUM_RUNS}\n"
+                BODY="${BODY}• ${U}\n  Status: Running (${RUN_NUM}/${NUM_RUNS})\n\n"
               else
-                BODY="${BODY}- ${U} Waiting..\n"
+                BODY="${BODY}• ${U}\n  Status: Waiting\n\n"
               fi
             done <<< "$GTMETRIX_URLS"
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \

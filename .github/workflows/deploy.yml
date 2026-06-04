@@ -115,7 +115,7 @@ jobs:
           ISSUE_NUMBER=$(echo "${{ steps.extract.outputs.issue_url }}" | grep -oE '[0-9]+$')
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \
             -X POST \
-            -f body="🔄 Deploy is in progress..." \
+            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg\" width=\"20\" height=\"20\"/> Deploy is in progress..." \
             --jq '.id')
           echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
 
@@ -166,12 +166,25 @@ jobs:
           FTP_RESULT: ${{ needs.deploy-ftp.result }}
           AWS_RESULT: ${{ needs.deploy-aws.result }}
         run: |
-          FTP_STATUS=$([ "$FTP_RESULT" = "success" ] && echo "✅ FTP Deploy" || [ "$FTP_RESULT" = "skipped" ] && echo "⏭️ FTP Deploy (skipped)" || echo "❌ FTP Deploy")
-          AWS_STATUS=$([ "$AWS_RESULT" = "success" ] && echo "✅ AWS Deploy" || [ "$AWS_RESULT" = "skipped" ] && echo "⏭️ AWS Deploy (skipped)" || echo "❌ AWS Deploy")
+          if [ "$FTP_RESULT" = "success" ]; then
+            FTP_STATUS="✅ FTP Deploy"
+          elif [ "$FTP_RESULT" = "skipped" ]; then
+            FTP_STATUS="⏭️ FTP Deploy (skipped)"
+          else
+            FTP_STATUS="❌ FTP Deploy"
+          fi
+
+          if [ "$AWS_RESULT" = "success" ]; then
+            AWS_STATUS="✅ AWS Deploy"
+          elif [ "$AWS_RESULT" = "skipped" ]; then
+            AWS_STATUS="⏭️ AWS Deploy (skipped)"
+          else
+            AWS_STATUS="❌ AWS Deploy"
+          fi
 
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$(printf '### ✅ Deploy completed\n\n%s\n%s' "$FTP_STATUS" "$AWS_STATUS")"
+            -f body="$(printf '### Deploy completed\n\n%s\n%s' "$FTP_STATUS" "$AWS_STATUS")"
 
   # ---------------------------------------------------------------------------
   # Job 4a: GTmetrix performance check (runs after deploys)
