@@ -147,8 +147,8 @@ jobs:
           # Emit outputs
           # ------------------------------------------------------------------
           PASSED_CHECKS=""
-          [ "$CHECK1_FAILED" = false ] && PASSED_CHECKS="${PASSED_CHECKS}- ✅ Image File Size\n"
-          [ "$CHECK2_FAILED" = false ] && PASSED_CHECKS="${PASSED_CHECKS}- ✅ Web File Extension\n"
+          [ "$CHECK1_FAILED" = false ] && PASSED_CHECKS="${PASSED_CHECKS}✅ Image File Size\n"
+          [ "$CHECK2_FAILED" = false ] && PASSED_CHECKS="${PASSED_CHECKS}✅ Web File Extension\n"
 
           if [ "$QA_PASSED" = "true" ]; then
             echo "✅ All QA checks passed"
@@ -181,9 +181,9 @@ jobs:
           FAILURE_MESSAGE: ${{ steps.qa.outputs.failure_message }}
         run: |
           if [ "$QA_PASSED" = "true" ]; then
-            BODY=$(printf '## ✅ QA Checks Passed\n\n%s' "$PASSED_CHECKS")
+            BODY=$(printf '# ✅ QA Checks Passed\n\n%s' "$PASSED_CHECKS")
           else
-            BODY=$(printf '## ❌ QA Checks Failed\n\n**Passed:**\n%s\n**Failed:**\n%s' "$PASSED_CHECKS" "$FAILURE_MESSAGE")
+            BODY=$(printf '# ❌ QA Checks Failed\n\n**Passed:**\n%s\n**Failed:**\n%s' "$PASSED_CHECKS" "$FAILURE_MESSAGE")
           fi
 
           gh issue comment "$ISSUE_URL" --body "$BODY"
