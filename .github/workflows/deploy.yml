@@ -23,10 +23,7 @@ jobs:
     uses: ./.github/workflows/ftp_deploy.yml
     permissions:
       contents: write
-    secrets:
-      FTP_SERVER: ${{ secrets.FTP_SERVER }}
-      FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
-      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+    secrets: inherit
 
   # ---------------------------------------------------------------------------
   # Job 1b: Deploy to AWS (runs in parallel with deploy-ftp)
@@ -36,9 +33,7 @@ jobs:
     uses: ./.github/workflows/aws_deploy.yml
     permissions:
       contents: write
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    secrets: inherit
 
   # ---------------------------------------------------------------------------
   # Job 2: Detect if push originated from a merged PR and echo its body
@@ -122,8 +117,7 @@ jobs:
     with:
       gtmetrix_url: ${{ needs.fetching-info.outputs.gtmetrix_url }}
       issue_url: ${{ needs.fetching-info.outputs.issue_url }}
-    secrets:
-      GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}
+    secrets: inherit
 
   # ---------------------------------------------------------------------------
   # Job 3b: QA Validation (runs after PR Info)
@@ -147,5 +141,4 @@ jobs:
       contents: write
     with:
       message: ${{ needs.qa-check.outputs.failure_message }}
-    secrets:
-      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+    secrets: inherit
