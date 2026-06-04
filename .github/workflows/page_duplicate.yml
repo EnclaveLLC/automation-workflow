@@ -220,15 +220,15 @@ jobs:
           GTMETRIX_LIST=$(echo "$GTMETRIX_URLS" | sed '/./s/^/- /')
 
           cat > /tmp/pr_body.md << PREOF
-          # Summary:
+          ### Summary:
           - Page duplicated successfully
           - Dynamic CTA replacements applied
           - PR created
 
-          # GTMetrix Test URLs
+          ### GTMetrix Test URLs
           ${GTMETRIX_LIST}
 
-          # Issue
+          ### Issue
           https://github.com/${REPO}/issues/${ISSUE_NUMBER}
           PREOF
 
