@@ -115,7 +115,7 @@ jobs:
           ISSUE_NUMBER=$(echo "${{ steps.extract.outputs.issue_url }}" | grep -oE '[0-9]+$')
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \
             -X POST \
-            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg\" width=\"20\" height=\"20\"/> Deploy is in progress..." \
+            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg\" width=\"20\" height=\"20\"/> Deployment in Progress" \
             --jq '.id')
           echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
 
