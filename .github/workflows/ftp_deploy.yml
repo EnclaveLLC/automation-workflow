@@ -110,6 +110,8 @@ jobs:
           git config user.name "enc-action[bot]"
           git config user.email "enc-action[bot]@users.noreply.github.com"
 
+          rm -rf EnclaveLLC/
+
           git add -A
           git commit -m "♻️ Update img src tag to CDN path https://d3j6ngx7p7lglj.cloudfront.net/${REPO_NAME}" || echo "No changes to commit"
 
