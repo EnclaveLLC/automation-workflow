@@ -88,7 +88,10 @@ jobs:
     uses: ./.github/workflows/ftp_deploy.yml
     permissions:
       contents: write
-    secrets: inherit
+    secrets:
+      FTP_SERVER: ${{ secrets.FTP_SERVER }}
+      FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
 
   # ---------------------------------------------------------------------------
   # Job 2b: Deploy to AWS (runs in parallel with deploy-ftp)
@@ -99,7 +102,9 @@ jobs:
     uses: ./.github/workflows/aws_deploy.yml
     permissions:
       contents: write
-    secrets: inherit
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   # ---------------------------------------------------------------------------
   # Job 3a: GTmetrix performance check (runs after deploys)
@@ -118,7 +123,8 @@ jobs:
     with:
       gtmetrix_url: ${{ needs.fetching-info.outputs.gtmetrix_url }}
       issue_url: ${{ needs.fetching-info.outputs.issue_url }}
-    secrets: inherit
+    secrets:
+      GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}
 
   # ---------------------------------------------------------------------------
   # Job 3b: QA Validation (runs after deploys)
@@ -145,4 +151,5 @@ jobs:
       contents: write
     with:
       message: ${{ needs.qa-check.outputs.failure_message }}
-    secrets: inherit
+    secrets:
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
