@@ -60,8 +60,8 @@ jobs:
           # Pull latest so AFTER includes any bot commits (e.g. WebP conversion from aws_deploy)
           git pull origin ${{ github.ref_name }} --no-rebase --quiet
 
-          BEFORE="${{ github.event.before }}"
-          AFTER=$(git rev-parse HEAD)
+          BEFORE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          AFTER="${{ github.event.pull_request.merge_commit_sha || github.sha }}"
 
           echo "$BEFORE"
 

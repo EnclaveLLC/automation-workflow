@@ -28,6 +28,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0
 
       # ---------------------------------------------------------
@@ -36,7 +37,7 @@ jobs:
       - name: Check for uploadable file changes
         id: uploadcheck
         run: |
-          CHANGED=$(git diff --name-only --diff-filter=AMD ${{ github.event.before }} ${{ github.sha }} \
+          CHANGED=$(git diff --name-only --diff-filter=AMD ${{ github.event.pull_request.base.sha || github.event.before }} ${{ github.event.pull_request.merge_commit_sha || github.sha }} \
             | grep -E '\.(html|php|css|js|htaccess|txt)$' || true)
 
           if [ -z "$CHANGED" ]; then
@@ -61,6 +62,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0
 
       # ---------------------------------------------------------
@@ -98,7 +100,7 @@ jobs:
       - name: Detect root changes
         id: rootcheck
         run: |
-          ROOT_CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} \
+          ROOT_CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha || github.event.before }} ${{ github.event.pull_request.merge_commit_sha || github.sha }} \
             | grep -E '^(index\.html|index\.php)$' || true)
 
           if [ -n "$ROOT_CHANGED" ]; then
@@ -113,7 +115,7 @@ jobs:
       - name: Detect changed folder inside /pages
         id: pagescheck
         run: |
-          FOLDERS=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} \
+          FOLDERS=$(git diff --name-only ${{ github.event.pull_request.base.sha || github.event.before }} ${{ github.event.pull_request.merge_commit_sha || github.sha }} \
             | grep '^pages/' \
             | cut -d/ -f2 \
             | sort -u)
