@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Workflow: Deploy (Reusable)
 # Steps:
-#   1.  Verify Secrets & Fetch PR Info
+#   1.  Fetch PR Info
 #   2a. FTP deploy     ─┐ parallel (after PR Info)
 #   2b. AWS deploy     ─┘
 #   3a. GTmetrix check ─┐ parallel (after deploys)
@@ -104,53 +104,12 @@ jobs:
             echo "-------------------------"
           fi
 
-  check-changes:
-    name: Check File Changes
-    needs: fetching-info
-    runs-on: ubuntu-latest
-    outputs:
-      has_changes_for_ftp: ${{ steps.check.outputs.has_changes_for_ftp }}
-      has_changes_for_aws: ${{ steps.check.outputs.has_changes_for_aws }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed file types
-        id: check
-        run: |
-          FTP_CHANGED=$(git diff --name-only --diff-filter=AMD ${{ github.event.before }} ${{ github.sha }} \
-            | grep -E '\.(html|php|css|js|htaccess|txt)$' || true)
-
-          AWS_CHANGED=$(git diff --name-only --diff-filter=AMD ${{ github.event.before }} ${{ github.sha }} \
-            | grep -E '\.(png|jpg|jpeg|webp)$' || true)
-
-          if [ -n "$FTP_CHANGED" ]; then
-            echo "✅ FTP files detected:"
-            echo "$FTP_CHANGED"
-            echo "has_changes_for_ftp=true" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ No FTP files changed."
-            echo "has_changes_for_ftp=false" >> $GITHUB_OUTPUT
-          fi
-
-          if [ -n "$AWS_CHANGED" ]; then
-            echo "✅ Image files detected:"
-            echo "$AWS_CHANGED"
-            echo "has_changes_for_aws=true" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ No image files changed."
-            echo "has_changes_for_aws=false" >> $GITHUB_OUTPUT
-          fi
-
   # ---------------------------------------------------------------------------
   # Job 2a: Deploy via FTP (runs after PR Info)
   # ---------------------------------------------------------------------------
   deploy-ftp:
     name: FTP Deploy
-    needs: check-changes
-    if: needs.check-changes.outputs.has_changes_for_ftp == 'true'
+    needs: fetching-info
     uses: ./.github/workflows/ftp_deploy.yml
     permissions:
       contents: write
@@ -164,8 +123,7 @@ jobs:
   # ---------------------------------------------------------------------------
   deploy-aws:
     name: AWS Deploy
-    needs: check-changes
-    if: needs.check-changes.outputs.has_changes_for_aws == 'true'
+    needs: fetching-info
     uses: ./.github/workflows/aws_deploy.yml
     permissions:
       contents: write

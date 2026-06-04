@@ -24,8 +24,40 @@ permissions:
   contents: write
 
 jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      has_images: ${{ steps.check_images.outputs.has_images }}
+
+    steps:
+      # ---------------------------
+      # Checkout repo
+      # ---------------------------
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ---------------------------------------------------------
+      # Check for image changes — end workflow early if none
+      # ---------------------------------------------------------
+      - name: Check for image changes
+        id: check_images
+        run: |
+          CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '\.(png|jpg|jpeg|webp)$' || true)
+          if [ -z "$CHANGED" ]; then
+            echo "No image changes detected in this push. Skipping deploy."
+            echo "has_images=false" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Image changes detected:"
+            echo "$CHANGED"
+            echo "has_images=true" >> $GITHUB_OUTPUT
+          fi
+
   convert-images:
     name: Initialize Image Conversion and Upload
+    needs: check-changes
+    if: needs.check-changes.outputs.has_images == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -267,60 +299,23 @@ jobs:
           done
 
       # ---------------------------
-      # Sync images from S3
+      # Delete removed images from S3
       # ---------------------------
-      - name: Sync images from S3
+      - name: Delete removed images from S3
         run: |
           REPO_NAME=$(basename $GITHUB_REPOSITORY)
-
-          # Get unique parent folders from image files touched in this push
-          FOLDERS=$(git diff --name-only --no-renames \
+          DELETED=$(git diff --name-only --diff-filter=D --no-renames \
             ${{ github.event.before }} ${{ github.sha }} \
-            | grep -iE '\.(webp|png|jpg|jpeg|gif|avif)$' \
-            | while IFS= read -r f; do [ -n "$f" ] && dirname "$f"; done \
-            | sort -u)
+            | grep -iE '\.(webp|png|jpg|jpeg|gif|avif)$' || true)
 
-          if [ -z "$FOLDERS" ]; then
-            echo "No image folders changed. Skipping sync."
-            exit 0
+          if [ -z "$DELETED" ]; then
+            echo "No images deleted in this push. Skipping S3 cleanup."
+          else
+            echo "🗑️ Removing deleted images from S3..."
+            while IFS= read -r file; do
+              [ -z "$file" ] && continue
+              echo "Removing s3://cdn-konscious/$REPO_NAME/$file"
+              aws s3 rm "s3://cdn-konscious/$REPO_NAME/$file" \
+                || echo "⚠️ Not found or already removed: $file"
+            done <<< "$DELETED"
           fi
-
-          echo "Syncing folders:"
-          echo "$FOLDERS"
-          echo "---"
-
-          while IFS= read -r folder; do
-            [ -z "$folder" ] && continue
-            echo "--- Checking folder: $folder ---"
-
-            # Images currently in repo folder (post-conversion state)
-            REPO_IMAGES=$(find "$folder" -maxdepth 1 -type f \
-              | grep -iE '\.(webp|png|jpg|jpeg|gif|avif)$' \
-              | sed 's|^\./||' \
-              | sort)
-
-            # Images currently in the matching S3 folder
-            S3_IMAGES=$(aws s3 ls "s3://cdn-konscious/$REPO_NAME/$folder/" \
-              | awk '{print $4}' \
-              | grep -iE '\.(webp|png|jpg|jpeg|gif|avif)$' \
-              | sort || true)
-
-            if [ -z "$S3_IMAGES" ]; then
-              echo "No images found in S3 for $folder. Skipping."
-              continue
-            fi
-
-            # Delete S3 images that no longer exist in the repo folder
-            while IFS= read -r s3_file; do
-              [ -z "$s3_file" ] && continue
-              repo_path="$folder/$s3_file"
-              if ! echo "$REPO_IMAGES" | grep -qF "$repo_path"; then
-                echo "🗑️ $repo_path not in repo — deleting from S3"
-                aws s3 rm "s3://cdn-konscious/$REPO_NAME/$repo_path" \
-                  || echo "⚠️ Failed to delete: $repo_path"
-              else
-                echo "✅ $repo_path in sync"
-              fi
-            done <<< "$S3_IMAGES"
-
-          done <<< "$FOLDERS"
