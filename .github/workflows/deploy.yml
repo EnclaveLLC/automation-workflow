@@ -106,6 +106,7 @@ jobs:
 
   check-changes:
     name: Check File Changes
+    needs: fetching-info
     runs-on: ubuntu-latest
     outputs:
       has_changes_for_ftp: ${{ steps.check.outputs.has_changes_for_ftp }}
@@ -148,7 +149,7 @@ jobs:
   # ---------------------------------------------------------------------------
   deploy-ftp:
     name: FTP Deploy
-    needs: [fetching-info, check-changes]
+    needs: check-changes
     if: needs.check-changes.outputs.has_changes_for_ftp == 'true'
     uses: ./.github/workflows/ftp_deploy.yml
     permissions:
@@ -163,7 +164,7 @@ jobs:
   # ---------------------------------------------------------------------------
   deploy-aws:
     name: AWS Deploy
-    needs: [fetching-info, check-changes]
+    needs: check-changes
     if: needs.check-changes.outputs.has_changes_for_aws == 'true'
     uses: ./.github/workflows/aws_deploy.yml
     permissions:
@@ -198,6 +199,7 @@ jobs:
   qa-check:
     name: QA Validation
     needs: [fetching-info, deploy-ftp, deploy-aws]
+    if: needs.fetching-info.outputs.issue_url != ''
     uses: ./.github/workflows/qa_check.yml
     with:
       issue_url: ${{ needs.fetching-info.outputs.issue_url }}

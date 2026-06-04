@@ -26,7 +26,6 @@ on:
 jobs:
   qa-check:
     name: QA Validation
-    if: inputs.issue_url != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
