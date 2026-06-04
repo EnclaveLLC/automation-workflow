@@ -213,7 +213,13 @@ jobs:
             const fs = require('fs');
             const histPath = 'automation-workflow/reports/gtmetrix-history.json';
             fs.mkdirSync('automation-workflow/reports', { recursive: true });
-            const existing = fs.existsSync(histPath) ? JSON.parse(fs.readFileSync(histPath, 'utf8')) : [];
+            let existing = [];
+            if (fs.existsSync(histPath)) {
+              try {
+                const content = fs.readFileSync(histPath, 'utf8').trim();
+                if (content) existing = JSON.parse(content);
+              } catch {}
+            }
             const newEntries = JSON.parse(process.env.TEST_RESULTS || '[]');
             fs.writeFileSync(histPath, JSON.stringify([...existing, ...newEntries], null, 2));
           "
