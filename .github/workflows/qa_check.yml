@@ -10,6 +10,11 @@ name: QA Check
 
 on:
   workflow_call:
+    inputs:
+      issue_url:
+        description: "GitHub issue URL to comment QA results on"
+        required: false
+        type: string
     outputs:
       qa_passed:
         description: "'true' if all checks passed, 'false' otherwise"
@@ -18,10 +23,13 @@ on:
         description: "Summary of which checks failed"
         value: ${{ jobs.qa-check.outputs.failure_message }}
 
-jobs: 
+jobs:
   qa-check:
     name: QA Validation
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     outputs:
       qa_passed:       ${{ steps.qa.outputs.qa_passed }}
       failure_message: ${{ steps.qa.outputs.failure_message }}
@@ -138,6 +146,10 @@ jobs:
           # ------------------------------------------------------------------
           # Emit outputs
           # ------------------------------------------------------------------
+          PASSED_CHECKS=""
+          [ "$CHECK1_FAILED" = false ] && PASSED_CHECKS="${PASSED_CHECKS}- ✅ Image File Size\n"
+          [ "$CHECK2_FAILED" = false ] && PASSED_CHECKS="${PASSED_CHECKS}- ✅ Web File Extension\n"
+
           if [ "$QA_PASSED" = "true" ]; then
             echo "✅ All QA checks passed"
             echo "qa_passed=true"   >> "$GITHUB_OUTPUT"
@@ -152,3 +164,33 @@ jobs:
               echo EOF
             } >> "$GITHUB_OUTPUT"
           fi
+
+          {
+            echo 'passed_checks<<EOF'
+            printf "$PASSED_CHECKS"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comment QA result on issue
+        if: inputs.issue_url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_URL: ${{ inputs.issue_url }}
+          QA_PASSED: ${{ steps.qa.outputs.qa_passed }}
+          PASSED_CHECKS: ${{ steps.qa.outputs.passed_checks }}
+          FAILURE_MESSAGE: ${{ steps.qa.outputs.failure_message }}
+        run: |
+          if [ "$QA_PASSED" = "true" ]; then
+            BODY="## ✅ QA Checks Passed
+
+          ${PASSED_CHECKS}"
+          else
+            BODY="## ❌ QA Checks Failed
+
+          **Passed:**
+          ${PASSED_CHECKS}
+          **Failed:**
+          ${FAILURE_MESSAGE}"
+          fi
+
+          gh issue comment "$ISSUE_URL" --body "$BODY"

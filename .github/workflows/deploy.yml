@@ -126,6 +126,8 @@ jobs:
     name: QA Validation
     needs: [fetching-info]
     uses: ./.github/workflows/qa_check.yml
+    with:
+      issue_url: ${{ needs.fetching-info.outputs.issue_url }}
     permissions:
       contents: read
 
