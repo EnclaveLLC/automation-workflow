@@ -74,7 +74,7 @@ jobs:
             echo "-------------------------"
 
             GTMETRIX_URLS=$(echo "$PR_BODY" \
-              | awk 'tolower($0) ~ /^gtmetrix test urls?/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH)} found && !/https?:\/\// && /^##/{exit}' \
+              | awk 'tolower($0) ~ /^### gtmetrix test urls?/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH)} found && !/https?:\/\// && /^##/{exit}' \
               | tr -d '\r')
 
             FIRST_ISSUE=$(echo "$PR_BODY" \
