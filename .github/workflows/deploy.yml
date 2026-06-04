@@ -227,18 +227,3 @@ jobs:
     permissions:
       contents: read
       issues: write
-
-  # ---------------------------------------------------------------------------
-  # Job 5: Notify Slack if QA failed
-  # ---------------------------------------------------------------------------
-  notify-failure:
-    name: Notify Slack on Failure
-    needs: qa-check
-    if: needs.qa-check.outputs.qa_passed == 'false'
-    uses: ./.github/workflows/slack.yml
-    permissions:
-      contents: write
-    with:
-      message: ${{ needs.qa-check.outputs.failure_message }}
-    secrets:
-      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
