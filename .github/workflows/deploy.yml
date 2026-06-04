@@ -60,10 +60,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          PR_DATA=$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
-            --jq '.[0] // empty')
+          PR_DATA=""
+          for i in 1 2 3 4 5; do
+            PR_DATA=$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+              --jq '.[0] // empty')
+            if [ -n "$PR_DATA" ]; then
+              break
+            fi
+            echo "Attempt $i/5: PR not found yet, retrying in 5s..."
+            sleep 5
+          done
 
           if [ -z "$PR_DATA" ]; then
             echo "This push was not associated with a pull request."
