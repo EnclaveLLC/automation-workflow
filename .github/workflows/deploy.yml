@@ -12,21 +12,6 @@ name: Deploy
 
 on:
   workflow_call:
-    secrets:
-      FTP_SERVER:
-        required: true
-      FTP_USERNAME:
-        required: true
-      FTP_PASSWORD:
-        required: true
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
-      GTMETRIX_API_KEY:
-        required: true
-      SLACK_BOT_TOKEN:
-        required: true
 
 jobs:
 
