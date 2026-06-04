@@ -156,18 +156,18 @@ jobs:
             echo "failure_message=" >> "$GITHUB_OUTPUT"
           else
             echo "❌ QA checks failed:"
-            printf "$FAILURES"
+            printf '%b' "$FAILURES"
             echo "qa_passed=false" >> "$GITHUB_OUTPUT"
             {
               echo 'failure_message<<EOF'
-              printf "$FAILURES"
+              printf '%b' "$FAILURES"
               echo EOF
             } >> "$GITHUB_OUTPUT"
           fi
 
           {
             echo 'passed_checks<<EOF'
-            printf "$PASSED_CHECKS"
+            printf '%b' "$PASSED_CHECKS"
             echo EOF
           } >> "$GITHUB_OUTPUT"
 
