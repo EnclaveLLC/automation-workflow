@@ -5,7 +5,14 @@ name: FTP Deploy
 
 on:
   workflow_call:
-
+    secrets:
+      FTP_SERVER:
+        required: true
+      FTP_USERNAME:
+        required: true
+      FTP_PASSWORD:
+        required: true
+        
 permissions:
   contents: write
 
