@@ -232,10 +232,12 @@ jobs:
           https://github.com/${REPO}/issues/${ISSUE_NUMBER}
           PREOF
 
+          ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title --jq '.title')
+
           PR_URL=$(gh pr create \
             --base  "$DEFAULT_BRANCH" \
             --head  "$BRANCH_NAME" \
-            --title "Update v12 VSLFB CTA links" \
+            --title "$ISSUE_TITLE" \
             --body-file /tmp/pr_body.md)
 
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
