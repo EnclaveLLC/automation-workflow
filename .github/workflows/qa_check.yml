@@ -181,16 +181,9 @@ jobs:
           FAILURE_MESSAGE: ${{ steps.qa.outputs.failure_message }}
         run: |
           if [ "$QA_PASSED" = "true" ]; then
-            BODY="## ✅ QA Checks Passed
-
-          ${PASSED_CHECKS}"
+            BODY=$(printf '## ✅ QA Checks Passed\n\n%s' "$PASSED_CHECKS")
           else
-            BODY="## ❌ QA Checks Failed
-
-          **Passed:**
-          ${PASSED_CHECKS}
-          **Failed:**
-          ${FAILURE_MESSAGE}"
+            BODY=$(printf '## ❌ QA Checks Failed\n\n**Passed:**\n%s\n**Failed:**\n%s' "$PASSED_CHECKS" "$FAILURE_MESSAGE")
           fi
 
           gh issue comment "$ISSUE_URL" --body "$BODY"

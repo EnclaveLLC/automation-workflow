@@ -17,6 +17,7 @@ on:
 
 jobs:
   gtmetrix:
+    name: GTmetrix Check
     if: inputs.gtmetrix_url != '' && inputs.issue_url != ''
     runs-on: ubuntu-latest
     permissions:
