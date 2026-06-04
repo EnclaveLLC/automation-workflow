@@ -39,6 +39,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      issues: write
     outputs:
       gtmetrix_url: ${{ steps.extract.outputs.gtmetrix_url }}
       issue_url: ${{ steps.extract.outputs.issue_url }}
