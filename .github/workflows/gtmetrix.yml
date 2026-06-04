@@ -210,7 +210,7 @@ jobs:
               echo "=== Best for $URL: $(cat /tmp/gtmetrix_best.json) ==="
             else
               echo "⚠️  No valid results for $URL — not saved."
-              FAILED_URLS=$(printf '%s%s\n' "$FAILED_URLS" "$URL")
+              FAILED_URLS="${FAILED_URLS:+$FAILED_URLS$'\n'}$URL"
             fi
 
             COMPLETED_URLS=$(printf '%s%s\n' "$COMPLETED_URLS" "$URL")
@@ -248,9 +248,9 @@ jobs:
               body += '- Structure: ' + r.structure + '%\n\n';
             }
 
-            for (const url of failedUrls) {
-              body += '### ' + url + '\n';
-              body += '❌ Failed to test due to insufficient API credits\n\n';
+            if (failedUrls.length) {
+              body += failedUrls.join('\n') + '\n\n';
+              body += '❌ Failed to test due to insufficient API credits. Please test the URLs in GTMetrix manually.\n';
             }
 
             process.stdout.write(body.trim());
