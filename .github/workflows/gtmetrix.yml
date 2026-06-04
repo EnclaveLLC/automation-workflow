@@ -256,8 +256,8 @@ jobs:
         run: |
           node -e "
             const fs = require('fs');
-            const histPath = 'automation-workflow/reports/gtmetrix-history.json';
-            fs.mkdirSync('automation-workflow/reports', { recursive: true });
+            const histPath = 'reports/gtmetrix-history.json';
+            fs.mkdirSync('reports', { recursive: true });
             let existing = [];
             if (fs.existsSync(histPath)) {
               try {
@@ -269,10 +269,9 @@ jobs:
             fs.writeFileSync(histPath, JSON.stringify([...existing, ...newEntries], null, 2));
           "
 
-          cd automation-workflow
           git config user.name "enc-action[bot]"
           git config user.email "enc-action[bot]@users.noreply.github.com"
           git add reports/gtmetrix-history.json
           git commit -m "Update GTmetrix history" || echo "Nothing to commit"
-          git pull --rebase origin main
+          git pull --rebase origin ${{ github.event.pull_request.base.ref || github.ref_name }}
           git push
