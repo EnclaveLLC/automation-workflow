@@ -29,10 +29,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          COMMENT_URL=$(gh issue comment "${{ inputs.issue_number }}" \
-            --repo "${{ github.repository }}" \
-            --body "🔄 Page duplication is now in progress...")
-          COMMENT_ID=$(echo "$COMMENT_URL" | grep -oE '[0-9]+$')
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
+            -X POST \
+            -f body="🔄 Page duplication is now in progress..." \
+            --jq '.id')
           echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
 
       - name: Checkout automation-workflow
