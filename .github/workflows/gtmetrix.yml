@@ -221,7 +221,7 @@ jobs:
           echo "test_results=$JSON_OUTPUT" >> "$GITHUB_OUTPUT"
           {
             echo 'failed_urls<<EOF'
-            printf '%s' "$FAILED_URLS"
+            printf '%s\n' "$FAILED_URLS"
             echo EOF
           } >> "$GITHUB_OUTPUT"
 
