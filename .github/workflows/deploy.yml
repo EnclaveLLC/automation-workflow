@@ -12,6 +12,19 @@ name: Deploy
 
 on:
   workflow_call:
+    inputs:
+      pr_number:
+        description: "PR number that triggered this deploy"
+        required: false
+        type: string
+      pr_title:
+        description: "PR title"
+        required: false
+        type: string
+      pr_body:
+        description: "PR body"
+        required: false
+        type: string
     secrets:
       FTP_SERVER:
         required: false
@@ -58,27 +71,14 @@ jobs:
       - name: Fetch PR body if push is from a merged PR
         id: extract
         env:
-          GH_TOKEN: ${{ github.token }}
+          PR_BODY: ${{ inputs.pr_body }}
         run: |
-          PR_DATA=""
-          for i in 1 2 3 4 5; do
-            PR_DATA=$(gh api \
-              -H "Accept: application/vnd.github+json" \
-              "/repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
-              --jq '.[0] // empty')
-            if [ -n "$PR_DATA" ]; then
-              break
-            fi
-            echo "Attempt $i/5: PR not found yet, retrying in 5s..."
-            sleep 5
-          done
+          PR_NUMBER="${{ inputs.pr_number }}"
 
-          if [ -z "$PR_DATA" ]; then
-            echo "This push was not associated with a pull request."
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No PR context provided — skipping."
           else
-            PR_NUMBER=$(echo "$PR_DATA" | jq -r '.number')
-            PR_BODY=$(echo "$PR_DATA" | jq -r '.body // ""')
-            echo "Push originated from PR #${PR_NUMBER}"
+            echo "Push originated from PR #${PR_NUMBER} — ${{ inputs.pr_title }}"
             echo "-------- PR Body --------"
             echo "$PR_BODY"
             echo "-------------------------"
