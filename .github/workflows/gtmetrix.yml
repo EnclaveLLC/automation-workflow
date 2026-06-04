@@ -130,6 +130,7 @@ jobs:
 
           NUM_RUNS=5
           COMPLETED_URLS=""
+          FAILED_URLS=""
 
           update_comment() {
             local CURRENT_URL="$1"
@@ -209,6 +210,7 @@ jobs:
               echo "=== Best for $URL: $(cat /tmp/gtmetrix_best.json) ==="
             else
               echo "⚠️  No valid results for $URL — not saved."
+              FAILED_URLS=$(printf '%s%s\n' "$FAILED_URLS" "$URL")
             fi
 
             COMPLETED_URLS=$(printf '%s%s\n' "$COMPLETED_URLS" "$URL")
@@ -217,19 +219,27 @@ jobs:
           JSON_OUTPUT=$(jq -c . "$TMPFILE")
 
           echo "test_results=$JSON_OUTPUT" >> "$GITHUB_OUTPUT"
+          {
+            echo 'failed_urls<<EOF'
+            printf '%s' "$FAILED_URLS"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
 
       - name: Post GTMetrix results to GitHub Issue
-        if: steps.run_tests.outputs.test_results != ''
+        if: steps.run_tests.outputs.test_results != '' || steps.run_tests.outputs.failed_urls != ''
         env:
           GH_TOKEN: ${{ github.token }}
           TEST_RESULTS: ${{ steps.run_tests.outputs.test_results }}
+          FAILED_URLS: ${{ steps.run_tests.outputs.failed_urls }}
           COMMENT_ID: ${{ steps.progress_comment.outputs.comment_id }}
         run: |
           COMMENT_BODY=$(node -e "
             const results = JSON.parse(process.env.TEST_RESULTS || '[]');
-            if (!results.length) process.exit(0);
+            const failedUrls = (process.env.FAILED_URLS || '').split('\n').filter(Boolean);
+
             let body = '## GTMetrix Test Results\n\n';
             body += 'Each URL was tested in GTMetrix 5 times and the best result was selected.\n\n';
+
             for (const r of results) {
               body += '### ' + r.url + '\n';
               body += '- Selected From: ' + (r.selected_from || 1) + ' test runs\n';
@@ -237,13 +247,14 @@ jobs:
               body += '- Performance: ' + r.performance + '%\n';
               body += '- Structure: ' + r.structure + '%\n\n';
             }
+
+            for (const url of failedUrls) {
+              body += '### ' + url + '\n';
+              body += '❌ Failed to test due to insufficient API credits\n\n';
+            }
+
             process.stdout.write(body.trim());
           ")
-
-          if [ -z "$COMMENT_BODY" ]; then
-            echo "⚠️  No GTMetrix results to post — skipping."
-            exit 0
-          fi
 
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
