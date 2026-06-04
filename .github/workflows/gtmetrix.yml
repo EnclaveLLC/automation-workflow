@@ -2,6 +2,9 @@ name: GT Metrix
 
 on:
   workflow_call:
+    secrets:
+      GTMETRIX_API_KEY:
+        required: true
     inputs:
       gtmetrix_url:
         description: 'GTmetrix URL to test'
