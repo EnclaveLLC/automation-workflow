@@ -4,9 +4,9 @@
 #   1.  Fetch PR Info
 #   2a. FTP deploy     ─┐ parallel (after PR Info)
 #   2b. AWS deploy     ─┘
-#   3a. GTmetrix check ─┐ parallel (after deploys)
-#   3b. QA check       ─┘
-#   4.  If QA fails → notify Slack
+#   3.  Notify deploy complete
+#   4a. GTmetrix check ─┐ parallel (after deploys)
+#   4b. QA check       ─┘
 # -----------------------------------------------------------------------------
 name: Deploy
 
@@ -195,12 +195,31 @@ jobs:
             -f body="$(printf '### Deployment completed\n\n%s\n%s' "$FTP_STATUS" "$AWS_STATUS")"
 
   # ---------------------------------------------------------------------------
-  # Job 4a: GTmetrix performance check (runs after deploys)
+  # Job 3a: QA Validation (runs after deploys)
+  # ---------------------------------------------------------------------------
+  qa-check:
+    name: QA Validation
+    needs: [fetching-info, deploy-ftp, deploy-aws]
+    if: |
+      !cancelled() &&
+      needs.fetching-info.outputs.issue_url != ''
+    uses: ./.github/workflows/qa_check.yml
+    with:
+      issue_url: ${{ needs.fetching-info.outputs.issue_url }}
+    permissions:
+      contents: read
+      issues: write
+
+  # ---------------------------------------------------------------------------
+  # Job 4: GTmetrix performance check (runs after deploys)
   # ---------------------------------------------------------------------------
   gtmetrix:
     name: GTmetrix Check
-    needs: [fetching-info, deploy-ftp, deploy-aws]
-    if: needs.fetching-info.outputs.gtmetrix_url != '' && needs.fetching-info.outputs.issue_url != ''
+    needs: [fetching-info, qa-check, notify-deploy-complete]
+    if: |
+      !cancelled() &&
+      needs.fetching-info.outputs.gtmetrix_url != '' &&
+      needs.fetching-info.outputs.issue_url != ''
     permissions:
       actions: read
       contents: write
@@ -213,17 +232,3 @@ jobs:
       issue_url: ${{ needs.fetching-info.outputs.issue_url }}
     secrets:
       GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}
-
-  # ---------------------------------------------------------------------------
-  # Job 3b: QA Validation (runs after deploys)
-  # ---------------------------------------------------------------------------
-  qa-check:
-    name: QA Validation
-    needs: [fetching-info, deploy-ftp, deploy-aws]
-    if: needs.fetching-info.outputs.issue_url != ''
-    uses: ./.github/workflows/qa_check.yml
-    with:
-      issue_url: ${{ needs.fetching-info.outputs.issue_url }}
-    permissions:
-      contents: read
-      issues: write
