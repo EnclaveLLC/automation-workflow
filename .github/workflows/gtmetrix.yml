@@ -211,15 +211,17 @@ jobs:
         run: |
           node -e "
             const fs = require('fs');
-            const histPath = 'gtmetrix-history.json';
+            const histPath = 'automation-workflow/reports/gtmetrix-history.json';
+            fs.mkdirSync('automation-workflow/reports', { recursive: true });
             const existing = fs.existsSync(histPath) ? JSON.parse(fs.readFileSync(histPath, 'utf8')) : [];
             const newEntries = JSON.parse(process.env.TEST_RESULTS || '[]');
             fs.writeFileSync(histPath, JSON.stringify([...existing, ...newEntries], null, 2));
           "
 
+          cd automation-workflow
           git config user.name "enc-action[bot]"
           git config user.email "enc-action[bot]@users.noreply.github.com"
-          git add gtmetrix-history.json
+          git add reports/gtmetrix-history.json
           git commit -m "Update GTmetrix history" || echo "Nothing to commit"
           git pull --rebase origin main
           git push
