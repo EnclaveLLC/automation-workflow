@@ -14,11 +14,6 @@ name: Upload Image to AWS S3
 
 on:
   workflow_call:
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
 
 permissions:
   contents: write
