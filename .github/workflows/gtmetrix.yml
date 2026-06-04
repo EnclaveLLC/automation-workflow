@@ -28,6 +28,18 @@ jobs:
       actions: read
 
     steps:
+      - name: Comment GTmetrix in progress
+        id: progress_comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUMBER=$(echo "${{ inputs.issue_url }}" | grep -oE '[0-9]+$')
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \
+            -X POST \
+            -f body="🔄 GTmetrix tests are in progress..." \
+            --jq '.id')
+          echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
+
       - name: Checkout caller repository
         uses: actions/checkout@v4
         with:
@@ -110,11 +122,34 @@ jobs:
         env:
           GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}
           GTMETRIX_URLS: ${{ steps.extract_url.outputs.gtmetrix_urls }}
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_ID: ${{ steps.progress_comment.outputs.comment_id }}
         run: |
           TMPFILE=$(mktemp)
           echo "[]" > "$TMPFILE"
 
           NUM_RUNS=5
+          COMPLETED_URLS=""
+
+          update_comment() {
+            local CURRENT_URL="$1"
+            local RUN_NUM="$2"
+            [ -z "$COMMENT_ID" ] && return
+            local BODY="### 🔄 GTmetrix tests are in progress...\n\n"
+            while IFS= read -r U; do
+              [ -z "$U" ] && continue
+              if printf '%s' "$COMPLETED_URLS" | grep -qF "$U"; then
+                BODY="${BODY}- ${U} ✅ Completed\n"
+              elif [ "$U" = "$CURRENT_URL" ]; then
+                BODY="${BODY}- ${U} Test Progress ${RUN_NUM}/${NUM_RUNS}\n"
+              else
+                BODY="${BODY}- ${U} Waiting..\n"
+              fi
+            done <<< "$GTMETRIX_URLS"
+            gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+              -X PATCH \
+              -f body="$(printf '%b' "$BODY")" > /dev/null 2>&1 || true
+          }
 
           while IFS= read -r URL; do
             [ -z "$URL" ] && continue
@@ -125,6 +160,7 @@ jobs:
 
             for RUN in $(seq 1 $NUM_RUNS); do
               echo "--- Run $RUN / $NUM_RUNS ---"
+              update_comment "$URL" "$RUN"
 
               OUTPUT=$(node automation-workflow/scripts/gtmetrix/gtmetrix.js "$URL" 2>&1 || true)
               echo "$OUTPUT"
@@ -146,6 +182,8 @@ jobs:
                 echo "⚠️  Run $RUN produced no result — skipping."
               fi
             done
+
+            COMPLETED_URLS=$(printf '%s%s\n' "$COMPLETED_URLS" "$URL")
 
             BEST_ENTRY=$(node -e "
               const fs = require('fs');
@@ -172,6 +210,8 @@ jobs:
             else
               echo "⚠️  No valid results for $URL — not saved."
             fi
+
+            COMPLETED_URLS=$(printf '%s%s\n' "$COMPLETED_URLS" "$URL")
           done <<< "$GTMETRIX_URLS"
 
           JSON_OUTPUT=$(jq -c . "$TMPFILE")
@@ -179,11 +219,11 @@ jobs:
           echo "test_results=$JSON_OUTPUT" >> "$GITHUB_OUTPUT"
 
       - name: Post GTMetrix results to GitHub Issue
-        if: steps.extract_url.outputs.issue_url != '' && steps.run_tests.outputs.test_results != ''
+        if: steps.run_tests.outputs.test_results != ''
         env:
           GH_TOKEN: ${{ github.token }}
           TEST_RESULTS: ${{ steps.run_tests.outputs.test_results }}
-          ISSUE_URL: ${{ steps.extract_url.outputs.issue_url }}
+          COMMENT_ID: ${{ steps.progress_comment.outputs.comment_id }}
         run: |
           COMMENT_BODY=$(node -e "
             const results = JSON.parse(process.env.TEST_RESULTS || '[]');
@@ -205,8 +245,9 @@ jobs:
             exit 0
           fi
 
-          echo "=== Posting comment to: $ISSUE_URL ==="
-          gh issue comment "$ISSUE_URL" --body "$COMMENT_BODY"
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$COMMENT_BODY"
 
       - name: Update GTmetrix history
         if: steps.extract_url.outputs.gtmetrix_urls != ''

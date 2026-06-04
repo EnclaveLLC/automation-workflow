@@ -42,6 +42,7 @@ jobs:
     outputs:
       gtmetrix_url: ${{ steps.extract.outputs.gtmetrix_url }}
       issue_url: ${{ steps.extract.outputs.issue_url }}
+      comment_id: ${{ steps.deploy_comment.outputs.comment_id }}
     steps:
       - name: Check secrets presence
         run: |
@@ -104,6 +105,19 @@ jobs:
             echo "-------------------------"
           fi
 
+      - name: Comment deploy in progress on issue
+        id: deploy_comment
+        if: steps.extract.outputs.issue_url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE_NUMBER=$(echo "${{ steps.extract.outputs.issue_url }}" | grep -oE '[0-9]+$')
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \
+            -X POST \
+            -f body="🔄 Deploy is in progress..." \
+            --jq '.id')
+          echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
+
   # ---------------------------------------------------------------------------
   # Job 2a: Deploy via FTP (runs after PR Info)
   # ---------------------------------------------------------------------------
@@ -132,7 +146,34 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   # ---------------------------------------------------------------------------
-  # Job 3a: GTmetrix performance check (runs after deploys)
+  # Job 3: Notify deploy complete
+  # ---------------------------------------------------------------------------
+  notify-deploy-complete:
+    name: Notify Deploy Complete
+    needs: [fetching-info, deploy-ftp, deploy-aws]
+    if: |
+      !cancelled() &&
+      needs.fetching-info.outputs.comment_id != ''
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Update issue comment with deploy status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_ID: ${{ needs.fetching-info.outputs.comment_id }}
+          FTP_RESULT: ${{ needs.deploy-ftp.result }}
+          AWS_RESULT: ${{ needs.deploy-aws.result }}
+        run: |
+          FTP_STATUS=$([ "$FTP_RESULT" = "success" ] && echo "✅ FTP Deploy" || [ "$FTP_RESULT" = "skipped" ] && echo "⏭️ FTP Deploy (skipped)" || echo "❌ FTP Deploy")
+          AWS_STATUS=$([ "$AWS_RESULT" = "success" ] && echo "✅ AWS Deploy" || [ "$AWS_RESULT" = "skipped" ] && echo "⏭️ AWS Deploy (skipped)" || echo "❌ AWS Deploy")
+
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$(printf '### ✅ Deploy completed\n\n%s\n%s' "$FTP_STATUS" "$AWS_STATUS")"
+
+  # ---------------------------------------------------------------------------
+  # Job 4a: GTmetrix performance check (runs after deploys)
   # ---------------------------------------------------------------------------
   gtmetrix:
     name: GTmetrix Check

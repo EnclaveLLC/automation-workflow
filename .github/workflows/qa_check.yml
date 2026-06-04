@@ -35,6 +35,19 @@ jobs:
       failure_message: ${{ steps.qa.outputs.failure_message }}
 
     steps:
+      - name: Comment QA Checks in progress
+        if: inputs.issue_url != ''
+        id: progress_comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUMBER=$(echo "${{ inputs.issue_url }}" | grep -oE '[0-9]+$')
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \
+            -X POST \
+            -f body="🔄 QA checks are now in progress..." \
+            --jq '.id')
+          echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -172,18 +185,20 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Comment QA result on issue
-        if: inputs.issue_url != ''
+        if: inputs.issue_url != '' && steps.progress_comment.outputs.comment_id != ''
         env:
-          GH_TOKEN: ${{ github.token }}
-          ISSUE_URL: ${{ inputs.issue_url }}
-          QA_PASSED: ${{ steps.qa.outputs.qa_passed }}
-          PASSED_CHECKS: ${{ steps.qa.outputs.passed_checks }}
+          GH_TOKEN:   ${{ github.token }}
+          COMMENT_ID: ${{ steps.progress_comment.outputs.comment_id }}
+          QA_PASSED:       ${{ steps.qa.outputs.qa_passed }}
+          PASSED_CHECKS:   ${{ steps.qa.outputs.passed_checks }}
           FAILURE_MESSAGE: ${{ steps.qa.outputs.failure_message }}
         run: |
           if [ "$QA_PASSED" = "true" ]; then
-            BODY=$(printf '# ✅ QA Checks Passed\n\n%s' "$PASSED_CHECKS")
+            BODY=$(printf '### ✅ QA Checks Passed\n\n%s' "$PASSED_CHECKS")
           else
-            BODY=$(printf '# ❌ QA Checks Failed\n\n**Passed:**\n%s\n**Failed:**\n%s' "$PASSED_CHECKS" "$FAILURE_MESSAGE")
+            BODY=$(printf '### ❌ QA Checks Failed\n\n**Passed:**\n%s\n**Failed:**\n%s' "$PASSED_CHECKS" "$FAILURE_MESSAGE")
           fi
 
-          gh issue comment "$ISSUE_URL" --body "$BODY"
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$BODY"
