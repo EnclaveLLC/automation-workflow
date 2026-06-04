@@ -1,10 +1,10 @@
 # -----------------------------------------------------------------------------
 # Workflow: Deploy (Reusable)
 # Steps:
-#   1a. FTP deploy     ─┐ parallel
-#   1b. AWS deploy     ─┘
-#   2.  PR Info (runs after both deploys)
-#   3a. GTmetrix check ─┐ parallel (after PR Info)
+#   1.  PR Info
+#   2a. FTP deploy     ─┐ parallel (after PR Info)
+#   2b. AWS deploy     ─┘
+#   3a. GTmetrix check ─┐ parallel (after deploys)
 #   3b. QA check       ─┘
 #   4.  If QA fails → notify Slack
 # -----------------------------------------------------------------------------
@@ -16,31 +16,10 @@ on:
 jobs:
 
   # ---------------------------------------------------------------------------
-  # Job 1a: Deploy via FTP
-  # ---------------------------------------------------------------------------
-  deploy-ftp:
-    name: FTP Deploy
-    uses: ./.github/workflows/ftp_deploy.yml
-    permissions:
-      contents: write
-    secrets: inherit
-
-  # ---------------------------------------------------------------------------
-  # Job 1b: Deploy to AWS (runs in parallel with deploy-ftp)
-  # ---------------------------------------------------------------------------
-  deploy-aws:
-    name: AWS Deploy
-    uses: ./.github/workflows/aws_deploy.yml
-    permissions:
-      contents: write
-    secrets: inherit
-
-  # ---------------------------------------------------------------------------
-  # Job 2: Detect if push originated from a merged PR and echo its body
+  # Job 1: Detect if push originated from a merged PR and echo its body
   # ---------------------------------------------------------------------------
   fetching-info:
     name: Fetch Info
-    needs: [deploy-ftp, deploy-aws]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -101,11 +80,33 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # Job 3a: GTmetrix performance check (runs after PR Info)
+  # Job 2a: Deploy via FTP (runs after PR Info)
+  # ---------------------------------------------------------------------------
+  deploy-ftp:
+    name: FTP Deploy
+    needs: [fetching-info]
+    uses: ./.github/workflows/ftp_deploy.yml
+    permissions:
+      contents: write
+    secrets: inherit
+
+  # ---------------------------------------------------------------------------
+  # Job 2b: Deploy to AWS (runs in parallel with deploy-ftp)
+  # ---------------------------------------------------------------------------
+  deploy-aws:
+    name: AWS Deploy
+    needs: [fetching-info]
+    uses: ./.github/workflows/aws_deploy.yml
+    permissions:
+      contents: write
+    secrets: inherit
+
+  # ---------------------------------------------------------------------------
+  # Job 3a: GTmetrix performance check (runs after deploys)
   # ---------------------------------------------------------------------------
   gtmetrix:
     name: GTmetrix Check
-    needs: [fetching-info]
+    needs: [fetching-info, deploy-ftp, deploy-aws]
     if: needs.fetching-info.outputs.gtmetrix_url != '' && needs.fetching-info.outputs.issue_url != ''
     permissions:
       actions: read
@@ -120,16 +121,17 @@ jobs:
     secrets: inherit
 
   # ---------------------------------------------------------------------------
-  # Job 3b: QA Validation (runs after PR Info)
+  # Job 3b: QA Validation (runs after deploys)
   # ---------------------------------------------------------------------------
   qa-check:
     name: QA Validation
-    needs: [fetching-info]
+    needs: [fetching-info, deploy-ftp, deploy-aws]
     uses: ./.github/workflows/qa_check.yml
     with:
       issue_url: ${{ needs.fetching-info.outputs.issue_url }}
     permissions:
       contents: read
+      issues: write
 
   # ---------------------------------------------------------------------------
   # Job 5: Notify Slack if QA failed
