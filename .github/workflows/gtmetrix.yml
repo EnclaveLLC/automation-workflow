@@ -11,9 +11,6 @@ on:
         description: 'Issue URL to post results to'
         required: false
         type: string
-    secrets:
-      GTMETRIX_API_KEY:
-        required: true
 
 jobs:
   gtmetrix:
