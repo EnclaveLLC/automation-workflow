@@ -203,7 +203,7 @@ jobs:
     if: |
       !cancelled() &&
       needs.fetching-info.outputs.issue_url != ''
-    uses: ./.github/workflows/qa_check.yml
+    uses: ./.github/workflows/pre_qa_check.yml
     with:
       issue_url: ${{ needs.fetching-info.outputs.issue_url }}
     permissions:
