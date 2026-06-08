@@ -138,7 +138,7 @@ jobs:
           if grep -q "splittester.class.php" "$INDEX_FILE"; then
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
-              -f body="$(printf '### Split Test Validation Failed\n\nSplit test code already exists in:\n\n❌ %s\n\nRemove the existing split test code before enabling a new one.' "$CONTROL_URL")"
+              -f body="$(printf '### Split Test URL Validation Failed\n\nSplit test code already exists in:\n\n❌ %s\n\nRemove the existing split test code before enabling a new one.' "$CONTROL_URL")"
             exit 1
           fi
 
