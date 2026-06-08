@@ -224,21 +224,16 @@ jobs:
           DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
 
           VARIATION_LIST=$(echo "$VARIATIONS" | jq -r '.[] | "- \(.name): \(.url)"')
+          VARIATION_URLS=$(echo "$VARIATIONS" | jq -r '.[] | .url')
 
           cat > /tmp/pr_body.md << PREOF
           ### Summary
           - Split test code added to control page
           - PR created
 
-          ### Control Page
-          ${CONTROL_URL}
-
-          ### Variations
-          ${VARIATION_LIST}
-
           ### GTMetrix Test URLs
           ${CONTROL_URL}
-          ${VARIATION_LIST}
+          ${VARIATION_URLS}
 
           ### Issue
           https://github.com/${REPO}/issues/${ISSUE_NUMBER}
