@@ -147,12 +147,15 @@ jobs:
 
     steps:
       - name: Comment adding split test code in progress
+        id: add_comment
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
+          ADD_COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
             -X POST \
-            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg\" width=\"20\" height=\"20\"/> Split test code implementation in progress"
+            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg\" width=\"20\" height=\"20\"/> Split test code implementation in progress" \
+            --jq '.id')
+          echo "comment_id=$ADD_COMMENT_ID" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -173,3 +176,94 @@ jobs:
 
       - name: Add split test code
         run: node EnclaveLLC/automation-workflow/scripts/split_test/add_split_test_code.js
+
+      - name: Set branch name
+        run: |
+          SLUG=$(echo "${{ github.event.issue.title }}" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed 's/[^a-z0-9]/-/g' \
+            | sed 's/-\+/-/g' \
+            | sed 's/^-\|-$//g')
+          echo "BRANCH_NAME=${SLUG}-${{ github.run_id }}" >> "$GITHUB_ENV"
+
+      - name: Create branch
+        run: |
+          set -euo pipefail
+          if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
+            echo "ERROR: Branch '$BRANCH_NAME' already exists on remote."
+            exit 1
+          fi
+          git checkout -b "$BRANCH_NAME"
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit changes
+        run: |
+          set -euo pipefail
+          git add .
+          git commit -m "${{ github.event.issue.title }}"
+
+      - name: Push branch
+        run: |
+          set -euo pipefail
+          git push -u origin "$BRANCH_NAME"
+
+      - name: Create pull request
+        id: create_pr
+        env:
+          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
+          VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
+        run: |
+          set -euo pipefail
+          ISSUE_NUMBER="${{ inputs.issue_number }}"
+          REPO="${{ github.repository }}"
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+
+          VARIATION_LIST=$(echo "$VARIATIONS" | jq -r '.[] | "- \(.name): \(.url)"')
+
+          cat > /tmp/pr_body.md << PREOF
+          ### Summary
+          - Split test code added to control page
+          - PR created
+
+          ### Control Page
+          ${CONTROL_URL}
+
+          ### Variations
+          ${VARIATION_LIST}
+
+          ### GTMetrix Test URLs
+          ${CONTROL_URL}
+          ${VARIATION_LIST}
+
+          ### Issue
+          https://github.com/${REPO}/issues/${ISSUE_NUMBER}
+          PREOF
+
+          ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title --jq '.title')
+
+          PR_URL=$(gh pr create \
+            --base  "$DEFAULT_BRANCH" \
+            --head  "$BRANCH_NAME" \
+            --title "$ISSUE_TITLE" \
+            --body-file /tmp/pr_body.md)
+
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo "Created PR: $PR_URL"
+
+      - name: Update comment — split test complete
+        env:
+          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
+          VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
+          PR_URL:      ${{ steps.create_pr.outputs.pr_url }}
+          ADD_COMMENT_ID: ${{ steps.add_comment.outputs.comment_id }}
+        run: |
+          VARIATION_LINES=$(echo "$VARIATIONS" | jq -r '.[] | "✅ \(.name): \(.url)"')
+          gh api repos/${{ github.repository }}/issues/comments/${ADD_COMMENT_ID} \
+            -X PATCH \
+            -f body="$(printf '### Split Test Code Added ✅\n\n**Control Page**\n✅ %s\n\n**Variations**\n%s\n\n**Pull Request**\n%s' "$CONTROL_URL" "$VARIATION_LINES" "$PR_URL")"
