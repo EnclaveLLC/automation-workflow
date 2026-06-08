@@ -1,0 +1,45 @@
+name: Restart Workflow
+
+on:
+  workflow_call:
+    inputs:
+      issue_number:
+        required: true
+        type: number
+      repository:
+        required: true
+        type: string
+
+jobs:
+  restart:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      issues: write
+
+    steps:
+      - name: Re-trigger workflow via label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ISSUE_NUMBER="${{ inputs.issue_number }}"
+          REPO="${{ inputs.repository }}"
+
+          LABEL=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json labels \
+            --jq '.labels[].name | select(
+              . == "Page Duplicate" or
+              . == "New Page" or
+              . == "Split Test On" or
+              . == "Split Test Off"
+            )' | head -1)
+
+          if [ -z "$LABEL" ]; then
+            gh issue comment "$ISSUE_NUMBER" --repo "$REPO" \
+              --body "❌ No trigger label found on this issue to restart."
+            exit 0
+          fi
+
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --remove-label "$LABEL"
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$LABEL"
+          echo "Re-triggered workflow via label: $LABEL"
