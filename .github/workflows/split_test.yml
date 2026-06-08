@@ -235,6 +235,8 @@ jobs:
 
           cat > /tmp/pr_body.md << PREOF
           ### Summary:
+          - Control page verified
+          - Variations pages verified
           - Split test code added to control page
           - PR created
 
