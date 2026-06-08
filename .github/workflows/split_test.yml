@@ -95,8 +95,11 @@ jobs:
           CONTROL_PATH="${CONTROL_PATH#/}"
           if [ ! -e "$CONTROL_PATH" ]; then
             MISSING="${MISSING}❌ ${CONTROL_URL}\n"
+          elif [ ! -f "$CONTROL_PATH/index.php" ]; then
+            MISSING="${MISSING}❌ ${CONTROL_URL} (index.php not found)\n"
           else
             echo "✅ Control path exists: $CONTROL_PATH"
+            echo "✅ index.php found in: $CONTROL_PATH"
           fi
 
           while IFS='|' read -r VAR_PATH VAR_URL; do
