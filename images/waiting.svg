@@ -1,20 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="148" height="40" viewBox="0 0 148 40">
-  <rect width="148" height="40" rx="8" fill="#1f2937"/>
-  <circle cx="22" cy="20" r="13" fill="#6b7280"/>
-  <!-- Clock face and hands centered on (22,20) -->
-  <g transform="translate(22,20)">
-    <!-- Clock outer ring -->
+<svg xmlns="http://www.w3.org/2000/svg" width="166" height="40" viewBox="0 0 166 40">
+  <rect width="166" height="40" rx="8" fill="#1f2937"/>
+  <circle cx="44" cy="20" r="13" fill="#6b7280"/>
+  <g transform="translate(44,20)">
     <circle r="8" fill="none" stroke="white" stroke-width="1.8"/>
-    <!-- Hour hand fixed at ~10 o'clock -->
     <line x1="0" y1="0" x2="-3.5" y2="-4" stroke="white" stroke-width="2" stroke-linecap="round"/>
-    <!-- Minute hand animated -->
     <line x1="0" y1="0" x2="0" y2="-6.5" stroke="white" stroke-width="1.6" stroke-linecap="round">
       <animateTransform attributeName="transform" type="rotate"
                         from="0" to="360"
                         dur="6s" repeatCount="indefinite"/>
     </line>
-    <!-- Center dot -->
     <circle r="1.5" fill="white"/>
   </g>
-  <text x="43" y="25" fill="white" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="12.5" font-weight="700" letter-spacing="1">WAITING</text>
+  <text x="65" y="25" fill="white" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="15" font-weight="700" letter-spacing="1">WAITING</text>
 </svg>
