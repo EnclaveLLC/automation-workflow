@@ -94,7 +94,7 @@ jobs:
 
           CONTROL_PATH="${CONTROL_PATH#/}"
           if [ ! -e "$CONTROL_PATH" ]; then
-            MISSING="${MISSING}❌ Control page not found: ${CONTROL_URL}\n"
+            MISSING="${MISSING}❌ ${CONTROL_URL}\n"
           else
             echo "✅ Control path exists: $CONTROL_PATH"
           fi
@@ -102,7 +102,7 @@ jobs:
           while IFS='|' read -r VAR_PATH VAR_URL; do
             VAR_PATH="${VAR_PATH#/}"
             if [ ! -e "$VAR_PATH" ]; then
-              MISSING="${MISSING}❌ Variation not found: ${VAR_URL}\n"
+              MISSING="${MISSING}❌ ${VAR_URL}\n"
             else
               echo "✅ Variation path exists: $VAR_PATH"
             fi
@@ -111,7 +111,7 @@ jobs:
           if [ -n "$MISSING" ]; then
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
-              -f body="$(printf '❌ Split test aborted — the following URLs were not found in the repository:\n\n'"$MISSING")"
+              -f body="$(printf '### Split Test Validation Failed\nThe following variation URL does not exist in the repository:\n\n'"$MISSING")"
             exit 1
           fi
 
