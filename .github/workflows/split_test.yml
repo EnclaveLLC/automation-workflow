@@ -146,6 +146,14 @@ jobs:
       COMMENT_ID:   ${{ needs.parse-issue.outputs.comment_id }}
 
     steps:
+      - name: Comment adding split test code in progress
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
+            -X POST \
+            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg\" width=\"20\" height=\"20\"/> Adding the split test code in progress"
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
