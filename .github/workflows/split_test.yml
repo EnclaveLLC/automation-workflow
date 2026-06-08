@@ -13,8 +13,39 @@ on:
         type: string
 
 jobs:
-  hello-world:
+  # ── Job 1: Parse issue body ─────────────────────────────────────────────────
+  parse-issue:
+    name: Parse Issue Body
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    outputs:
+      control_url:  ${{ steps.parse.outputs.control_url }}
+      control_path: ${{ steps.parse.outputs.control_path }}
+      variations:   ${{ steps.parse.outputs.variations }}
+      comment_id:   ${{ steps.progress_comment.outputs.comment_id }}
+
     steps:
-      - name: Hello World
-        run: echo "Hello, World!" 
+      - name: Comment split test in progress
+        id: progress_comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
+            -X POST \
+            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg\" width=\"20\" height=\"20\"/> Split test ${{ inputs.type }} in progress" \
+            --jq '.id')
+          echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout automation-workflow
+        uses: actions/checkout@v4
+        with:
+          repository: EnclaveLLC/automation-workflow
+          path: EnclaveLLC/automation-workflow
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Parse issue body
+        id: parse
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: node EnclaveLLC/automation-workflow/scripts/split_test/parse_issue.js
