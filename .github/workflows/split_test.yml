@@ -114,7 +114,7 @@ jobs:
           if [ -n "$MISSING" ]; then
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
-              -f body="$(printf '### Split Test Validation Failed\n\n\nThe following variation URL does not exist in the repository:\n\n'"$MISSING")"
+              -f body="$(printf '### Split Test Validation Failed\n\nThe following issue(s) were found:\n\n'"$MISSING")"
             exit 1
           fi
 
