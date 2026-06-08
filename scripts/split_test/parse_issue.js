@@ -76,8 +76,7 @@ if (!control_url) {
 }
 
 if (variations.length === 0) {
-  console.error('ERROR: No Page Variations found in issue body.');
-  process.exit(1);
+  console.log('No Page Variations found — skipping variation outputs.');
 }
 
 const variationsJson = JSON.stringify(variations);

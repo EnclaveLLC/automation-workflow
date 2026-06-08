@@ -102,14 +102,18 @@ jobs:
             echo "✅ index.php found in: $CONTROL_PATH"
           fi
 
-          while IFS='|' read -r VAR_PATH VAR_URL; do
-            VAR_PATH="${VAR_PATH#/}"
-            if [ ! -e "$VAR_PATH" ]; then
-              MISSING="${MISSING}❌ ${VAR_URL}\n"
-            else
-              echo "✅ Variation path exists: $VAR_PATH"
-            fi
-          done < <(echo "$VARIATIONS" | jq -r '.[] | "\(.path)|\(.url)"')
+          if [ "$(echo "$VARIATIONS" | jq 'length')" -gt 0 ]; then
+            while IFS='|' read -r VAR_PATH VAR_URL; do
+              VAR_PATH="${VAR_PATH#/}"
+              if [ ! -e "$VAR_PATH" ]; then
+                MISSING="${MISSING}❌ ${VAR_URL}\n"
+              else
+                echo "✅ Variation path exists: $VAR_PATH"
+              fi
+            done < <(echo "$VARIATIONS" | jq -r '.[] | "\(.path)|\(.url)"')
+          else
+            echo "No variations provided — skipping variation path check."
+          fi
 
           if [ -n "$MISSING" ]; then
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
@@ -127,7 +131,7 @@ jobs:
 
   # ── Job 3: Add split test code ───────────────────────────────────────────────
   add-split-test-code:
-    if: needs.check-paths.result == 'success'
+    if: inputs.type == 'on' && needs.check-paths.result == 'success'
     name: Add Split Test Code
     needs: [parse-issue, check-paths]
     runs-on: ubuntu-latest
