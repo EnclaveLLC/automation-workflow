@@ -69,7 +69,7 @@ jobs:
           VARIATION_LINES=$(echo "$VARIATIONS" | jq -r '.[] | "- \(.name): \(.url)"')
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$(printf '<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Verifying URLs\n\n### Control Page\n- %s\n\n### Variations\n%s' "$CONTROL_URL" "$VARIATION_LINES")"
+            -f body="$(printf '<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Verifying URLs\n\nControl Page\n- %s\n\nVariations\n%s' "$CONTROL_URL" "$VARIATION_LINES")"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -120,4 +120,4 @@ jobs:
           VARIATION_LINES=$(echo "$VARIATIONS" | jq -r '.[] | "✅ \(.name): \(.url)"')
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$(printf '✅ URL Verification Passed\n\n### Control Page\n\n✅ %s\n\n### Variations\n\n%s\n\nResult:\n✅ All URLs exist in the repository' "$CONTROL_URL" "$VARIATION_LINES")"
+            -f body="$(printf '### URL Verification Passed\n\nControl Page\n\n✅ %s\n\nVariations\n\n%s\n\nResult:\n✅ All URLs exist in the repository' "$CONTROL_URL" "$VARIATION_LINES")"
