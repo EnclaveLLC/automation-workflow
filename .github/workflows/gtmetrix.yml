@@ -158,8 +158,18 @@ jobs:
 
             RUNS_FILE=$(mktemp)
             echo "[]" > "$RUNS_FILE"
+            URL_START=$(date +%s)
 
             for RUN in $(seq 1 $NUM_RUNS); do
+              ELAPSED=$(( $(date +%s) - URL_START ))
+              if [ "$ELAPSED" -ge 270 ]; then
+                echo "⏱️ Timeout: $URL has been running for ${ELAPSED}s — ending job."
+                gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+                  -X PATCH \
+                  -f body="$(printf '### ⚠️ GTmetrix Test Issue\n\nSomething went wrong while testing:\n**%s**\n\nThe test has been running for over 5 minutes and was ended automatically.\nPlease test this URL in GTmetrix manually.' "$URL")"
+                exit 1
+              fi
+
               echo "--- Run $RUN / $NUM_RUNS ---"
               update_comment "$URL" "$RUN"
 

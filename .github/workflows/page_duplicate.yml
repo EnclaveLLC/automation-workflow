@@ -77,7 +77,7 @@ jobs:
           if [ -e "$DUPLICATE_PATH" ]; then
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
-              -f body="❌ Page duplication aborted: the path \`${DUPLICATE_PATH}\` already exists in the repository. Please choose a different path."
+              -f body="$(printf '### Page Duplication Failed\n\nThe following path already exists in the repository:\n\n❌ %s\n\nPlease choose a different path.' "$DUPLICATE_PATH")"
             echo "Error: '$DUPLICATE_PATH' already exists."
             exit 1
           fi
