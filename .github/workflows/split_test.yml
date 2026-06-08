@@ -124,10 +124,17 @@ jobs:
 
           echo "✅ All paths verified."
 
+      - name: Update comment — validation passed
+        env:
+          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_ID:  ${{ needs.parse-issue.outputs.comment_id }}
+          CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
+          VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
+        run: |
           VARIATION_LINES=$(echo "$VARIATIONS" | jq -r '.[] | "✅ \(.name): \(.url)"')
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$(printf '### Split Test Validation Passed\n\n\nControl Page\n✅ %s\n\nVariations\n%s\n\nResult:\n✅ All URLs exist in the repository' "$CONTROL_URL" "$VARIATION_LINES")"
+            -f body="$(printf '### Split Test Validation Passed\n\nControl Page\n✅ %s\n\nVariations\n%s\n\nResult:\n✅ All URLs exist in the repository' "$CONTROL_URL" "$VARIATION_LINES")"
 
   # ── Job 3: Add split test code ───────────────────────────────────────────────
   add-split-test-code:
@@ -227,7 +234,7 @@ jobs:
           VARIATION_URLS=$(echo "$VARIATIONS" | jq -r '.[] | .url')
 
           cat > /tmp/pr_body.md << PREOF
-          ### Summary
+          ### Summary:
           - Split test code added to control page
           - PR created
 
@@ -260,4 +267,4 @@ jobs:
         run: |
           gh api repos/${{ github.repository }}/issues/comments/${ADD_COMMENT_ID} \
             -X PATCH \
-            -f body="$(printf '### Summary\n- Split test code added to control page\n- PR created\n\nThe split test ${{ inputs.type }} is now available in PR to review:\n%s' "$PR_URL")"
+            -f body="$(printf '### Summary:\n- Split test code added to control page\n- PR created\n\nThe split test ${{ inputs.type }} is now available in PR to review:\n%s' "$PR_URL")"
