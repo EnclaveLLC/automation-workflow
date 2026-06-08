@@ -173,8 +173,8 @@ jobs:
               echo "--- Run $RUN / $NUM_RUNS ---"
               update_comment "$URL" "$RUN"
 
-              timeout 60 node automation-workflow/scripts/gtmetrix/gtmetrix.js "$URL" > /tmp/gtm_out.txt 2>&1
-              GTMETRIX_EXIT=$?
+              GTMETRIX_EXIT=0
+              timeout 60 node automation-workflow/scripts/gtmetrix/gtmetrix.js "$URL" > /tmp/gtm_out.txt 2>&1 || GTMETRIX_EXIT=$?
               OUTPUT=$(cat /tmp/gtm_out.txt)
               echo "$OUTPUT"
 

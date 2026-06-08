@@ -160,9 +160,7 @@ jobs:
   notify-deploy-complete:
     name: Notify Deploy Complete
     needs: [fetching-info, deploy-ftp, deploy-aws]
-    if: |
-      !cancelled() &&
-      needs.fetching-info.outputs.comment_id != ''
+    if: always() && needs.fetching-info.outputs.comment_id != ''
     runs-on: ubuntu-latest
     permissions:
       issues: write
