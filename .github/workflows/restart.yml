@@ -11,22 +11,21 @@ on:
         type: string
 
 jobs:
-  restart:
+  get-label:
+    name: Get Issue Label
     runs-on: ubuntu-latest
     permissions:
-      actions: write
-      issues: write
-
+      issues: read
+    outputs:
+      label_name: ${{ steps.get.outputs.label_name }}
     steps:
-      - name: Re-trigger workflow via label
+      - name: Get trigger label from issue
+        id: get
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          ISSUE_NUMBER="${{ inputs.issue_number }}"
-          REPO="${{ inputs.repository }}"
-
-          LABEL=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json labels \
+          LABEL=$(gh issue view "${{ inputs.issue_number }}" --repo "${{ inputs.repository }}" --json labels \
             --jq '.labels[].name | select(
               . == "Page Duplicate" or
               . == "New Page" or
@@ -35,11 +34,21 @@ jobs:
             )' | head -1)
 
           if [ -z "$LABEL" ]; then
-            gh issue comment "$ISSUE_NUMBER" --repo "$REPO" \
-              --body "❌ No trigger label found on this issue to restart."
-            exit 0
+            echo "❌ No trigger label found on this issue."
+            exit 1
           fi
 
-          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --remove-label "$LABEL"
-          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$LABEL"
-          echo "Re-triggered workflow via label: $LABEL"
+          echo "label_name=$LABEL" >> "$GITHUB_OUTPUT"
+
+  dispatch:
+    name: Restart Workflow
+    needs: get-label
+    uses: ./.github/workflows/standard_workflow.yml
+    with:
+      label_name: ${{ needs.get-label.outputs.label_name }}
+      issue_number: ${{ inputs.issue_number }}
+    secrets: inherit
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
