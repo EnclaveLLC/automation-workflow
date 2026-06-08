@@ -162,7 +162,7 @@ jobs:
 
             for RUN in $(seq 1 $NUM_RUNS); do
               ELAPSED=$(( $(date +%s) - URL_START ))
-              if [ "$ELAPSED" -ge 60 ]; then
+              if [ "$ELAPSED" -ge 180 ]; then
                 echo "⏱️ Timeout: $URL has been running for ${ELAPSED}s — ending job."
                 gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
                   -X PATCH \
@@ -174,7 +174,7 @@ jobs:
               update_comment "$URL" "$RUN"
 
               GTMETRIX_EXIT=0
-              timeout 60 node automation-workflow/scripts/gtmetrix/gtmetrix.js "$URL" > /tmp/gtm_out.txt 2>&1 || GTMETRIX_EXIT=$?
+              timeout 180 node automation-workflow/scripts/gtmetrix/gtmetrix.js "$URL" > /tmp/gtm_out.txt 2>&1 || GTMETRIX_EXIT=$?
               OUTPUT=$(cat /tmp/gtm_out.txt)
               echo "$OUTPUT"
 
