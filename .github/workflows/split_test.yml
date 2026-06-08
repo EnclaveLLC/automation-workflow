@@ -124,3 +124,40 @@ jobs:
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
             -f body="$(printf '### Split Test Validation Passed\n\n\nControl Page\n✅ %s\n\nVariations\n%s\n\nResult:\n✅ All URLs exist in the repository' "$CONTROL_URL" "$VARIATION_LINES")"
+
+  # ── Job 3: Add split test code ───────────────────────────────────────────────
+  add-split-test-code:
+    if: needs.check-paths.result == 'success'
+    name: Add Split Test Code
+    needs: [parse-issue, check-paths]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    env:
+      CONTROL_PATH: ${{ needs.parse-issue.outputs.control_path }}
+      VARIATIONS:   ${{ needs.parse-issue.outputs.variations }}
+      COMMENT_ID:   ${{ needs.parse-issue.outputs.comment_id }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest changes
+        run: git pull origin ${{ github.event.repository.default_branch }}
+
+      - name: Checkout automation-workflow
+        uses: actions/checkout@v4
+        with:
+          repository: EnclaveLLC/automation-workflow
+          path: EnclaveLLC/automation-workflow
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add split test code
+        run: node EnclaveLLC/automation-workflow/scripts/split_test/add_split_test_code.js
