@@ -49,3 +49,70 @@ jobs:
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: node EnclaveLLC/automation-workflow/scripts/split_test/parse_issue.js
+
+  # ── Job 2: Verify control and variation paths exist ─────────────────────────
+  check-paths:
+    name: Check Paths Exist
+    needs: parse-issue
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Update comment — verifying URLs
+        env:
+          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          COMMENT_ID:  ${{ needs.parse-issue.outputs.comment_id }}
+          CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
+          VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
+        run: |
+          VARIATION_LINES=$(echo "$VARIATIONS" | jq -r '.[] | "- \(.name): \(.url)"')
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$(printf '<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Verifying URLs\n\n###Control Page\n- %s\n\n###Variations\n%s' "$CONTROL_URL" "$VARIATION_LINES")"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest changes
+        run: git pull origin ${{ github.event.repository.default_branch }}
+
+      - name: Verify paths exist
+        env:
+          GH_TOKEN:     ${{ secrets.GITHUB_TOKEN }}
+          CONTROL_PATH: ${{ needs.parse-issue.outputs.control_path }}
+          CONTROL_URL:  ${{ needs.parse-issue.outputs.control_url }}
+          VARIATIONS:   ${{ needs.parse-issue.outputs.variations }}
+          COMMENT_ID:   ${{ needs.parse-issue.outputs.comment_id }}
+        run: |
+          set -euo pipefail
+          MISSING=""
+
+          CONTROL_PATH="${CONTROL_PATH#/}"
+          if [ ! -e "$CONTROL_PATH" ]; then
+            MISSING="${MISSING}❌ Control page not found: ${CONTROL_URL}\n"
+          else
+            echo "✅ Control path exists: $CONTROL_PATH"
+          fi
+
+          while IFS='|' read -r VAR_PATH VAR_URL; do
+            VAR_PATH="${VAR_PATH#/}"
+            if [ ! -e "$VAR_PATH" ]; then
+              MISSING="${MISSING}❌ Variation not found: ${VAR_URL}\n"
+            else
+              echo "✅ Variation path exists: $VAR_PATH"
+            fi
+          done < <(echo "$VARIATIONS" | jq -r '.[] | "\(.path)|\(.url)"')
+
+          if [ -n "$MISSING" ]; then
+            gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+              -X PATCH \
+              -f body="$(printf '❌ Split test aborted — the following URLs were not found in the repository:\n\n'"$MISSING")"
+            exit 1
+          fi
+
+          echo "✅ All paths verified."
