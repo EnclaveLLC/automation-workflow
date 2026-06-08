@@ -134,7 +134,7 @@ jobs:
           VARIATION_LINES=$(echo "$VARIATIONS" | jq -r '.[] | "✅ \(.name): \(.url)"')
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$(printf '### Split Test Validation Passed\n\nControl Page\n✅ %s\n\nVariations\n%s\n\nResult:\n✅ All URLs exist in the repository' "$CONTROL_URL" "$VARIATION_LINES")"
+            -f body="$(printf '### Split Test URL Validation Passed\n\nControl Page\n✅ %s\n\nVariations\n%s\n\nResult:\n✅ All URLs exist in the repository' "$CONTROL_URL" "$VARIATION_LINES")"
 
   # ── Job 3: Add split test code ───────────────────────────────────────────────
   add-split-test-code:
