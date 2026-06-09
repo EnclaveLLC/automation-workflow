@@ -208,14 +208,19 @@ jobs:
           const failedUrl = process.env.FAILED_URL;
           const reason = process.env.ABORT_REASON;
           const badgeAborted = process.env.BADGE_ABORTED;
+          // Update GT Metrix Test header row badge
           body = body.replace(
             /(\| GT Metrix Test \| )<img[^>]+>( \|)/,
             `$1<img src="${badgeAborted}" width="120">$2`
           );
-          const errorNote = `\n\n> ⚠️ **Test aborted:** ${failedUrl}\n> ${reason}`;
+          // Update all URL row badges inside the section + append error note
           body = body.replace(
             /(<!-- gtmetrix-details -->)([\s\S]*?)(<!-- \/gtmetrix-details -->)/,
-            (_, open, content, close) => `${open}${content.trimEnd()}${errorNote}\n${close}`
+            (_, open, content, close) => {
+              const updated = content.replace(/<img[^>]+>/g, `<img src="${badgeAborted}" width="120">`);
+              const errorNote = `\n\n> ⚠️ **Test aborted:** ${failedUrl}\n> ${reason}`;
+              return `${open}${updated.trimEnd()}${errorNote}\n${close}`;
+            }
           );
           process.stdout.write(body);
           ABORTSCRIPT
