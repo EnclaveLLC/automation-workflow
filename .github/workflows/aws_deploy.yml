@@ -14,6 +14,11 @@ name: Upload Image to AWS S3
 
 on:
   workflow_call:
+    inputs:
+      comment_id:
+        description: "Issue comment ID to update"
+        required: false
+        type: string
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -22,6 +27,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   check-changes:
@@ -54,6 +60,19 @@ jobs:
             echo "$CHANGED"
             echo "has_images=true" >> $GITHUB_OUTPUT
           fi
+
+      - name: Update comment — AWS skipped
+        if: steps.check_images.outputs.has_images == 'false' && inputs.comment_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_ID: ${{ inputs.comment_id }}
+        run: |
+          CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
+          echo "$CURRENT" > /tmp/current_body.txt
+          sed -i 's/AWS Deploy: In-Progress/AWS Deploy: Skipped/' /tmp/current_body.txt
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$(cat /tmp/current_body.txt)"
 
   convert-images:
     name: Initialize Image Conversion and Upload
@@ -320,3 +339,16 @@ jobs:
                 || echo "⚠️ Not found or already removed: $file"
             done <<< "$DELETED"
           fi
+
+      - name: Update comment — AWS completed
+        if: inputs.comment_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_ID: ${{ inputs.comment_id }}
+        run: |
+          CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
+          echo "$CURRENT" > /tmp/current_body.txt
+          sed -i 's/AWS Deploy: In-Progress/AWS Deploy: Completed/' /tmp/current_body.txt
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$(cat /tmp/current_body.txt)"

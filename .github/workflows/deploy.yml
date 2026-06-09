@@ -114,16 +114,45 @@ jobs:
             echo "-------------------------"
           fi
 
-      - name: Comment deploy in progress on issue
+      - name: Post initial workflow status comment
         id: deploy_comment
         if: steps.extract.outputs.issue_url != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ISSUE_NUMBER=$(echo "${{ steps.extract.outputs.issue_url }}" | grep -oE '[0-9]+$')
+
+          cat > /tmp/initial_comment.js << 'SCRIPT'
+          const base = 'https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images';
+          const title = process.env.PR_TITLE || '';
+          const lines = [
+            '## <img src="${base}/loading.svg" height="28"> Standard Workflow: ' + title,
+            '',
+            '| Step | Status |',
+            '|:---|:---|',
+            `| Deployment | <img src="${base}/in-progress.svg" height="28"> |`,
+            `| Pre Quality Assurance | <img src="${base}/waiting.svg" height="28"> |`,
+            `| GT Metrix Test | <img src="${base}/waiting.svg" height="28"> |`,
+            '',
+            '---',
+            '### Deployment Details',
+            '```',
+            'FTP Deploy: In-Progress',
+            'AWS Deploy: In-Progress',
+            '```',
+            '---'
+            '<!-- qa-details -->',
+            '<!-- /qa-details -->',
+            '<!-- gtmetrix-details -->',
+            '<!-- /gtmetrix-details -->',
+          ];
+          process.stdout.write(lines.join('\n'));
+          SCRIPT
+
+          BODY=$(PR_TITLE="${{ inputs.pr_title }}" node /tmp/initial_comment.js)
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \
             -X POST \
-            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg\" width=\"20\" height=\"20\"/> Deployment in Progress" \
+            -f body="$BODY" \
             --jq '.id')
           echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
 
@@ -136,6 +165,9 @@ jobs:
     uses: ./.github/workflows/ftp_deploy.yml
     permissions:
       contents: write
+      issues: write
+    with:
+      comment_id: ${{ needs.fetching-info.outputs.comment_id }}
     secrets:
       FTP_SERVER: ${{ secrets.FTP_SERVER }}
       FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
@@ -150,52 +182,17 @@ jobs:
     uses: ./.github/workflows/aws_deploy.yml
     permissions:
       contents: write
+      issues: write
+    with:
+      comment_id: ${{ needs.fetching-info.outputs.comment_id }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   # ---------------------------------------------------------------------------
-  # Job 3: Notify deploy complete
+  # Job 3: QA Validation (runs after deploys)
   # ---------------------------------------------------------------------------
-  notify-deploy-complete:
-    name: Notify Deploy Complete
-    needs: [fetching-info, deploy-ftp, deploy-aws]
-    if: always() && needs.fetching-info.outputs.comment_id != ''
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-    steps:
-      - name: Update issue comment with deploy status
-        env:
-          GH_TOKEN: ${{ github.token }}
-          COMMENT_ID: ${{ needs.fetching-info.outputs.comment_id }}
-          FTP_RESULT: ${{ needs.deploy-ftp.result }}
-          AWS_RESULT: ${{ needs.deploy-aws.result }}
-        run: |
-          if [ "$FTP_RESULT" = "success" ]; then
-            FTP_STATUS="✅ FTP Deploy"
-          elif [ "$FTP_RESULT" = "skipped" ]; then
-            FTP_STATUS="⏭️ FTP Deploy (skipped)"
-          else
-            FTP_STATUS="❌ FTP Deploy"
-          fi
-
-          if [ "$AWS_RESULT" = "success" ]; then
-            AWS_STATUS="✅ AWS Deploy"
-          elif [ "$AWS_RESULT" = "skipped" ]; then
-            AWS_STATUS="⏭️ AWS Deploy (skipped)"
-          else
-            AWS_STATUS="❌ AWS Deploy"
-          fi
-
-          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
-            -X PATCH \
-            -f body="$(printf '### Deployment completed\n\n%s\n%s' "$FTP_STATUS" "$AWS_STATUS")"
-
-  # ---------------------------------------------------------------------------
-  # Job 3a: QA Validation (runs after deploys)
-  # ---------------------------------------------------------------------------
-  qa-check:
+  pre-qa-check:
     name: QA Validation
     needs: [fetching-info, deploy-ftp, deploy-aws]
     if: |
@@ -204,6 +201,7 @@ jobs:
     uses: ./.github/workflows/pre_qa_check.yml
     with:
       issue_url: ${{ needs.fetching-info.outputs.issue_url }}
+      comment_id: ${{ needs.fetching-info.outputs.comment_id }}
     permissions:
       contents: read
       issues: write
@@ -213,7 +211,7 @@ jobs:
   # ---------------------------------------------------------------------------
   gtmetrix:
     name: GTmetrix Check
-    needs: [fetching-info, qa-check, notify-deploy-complete]
+    needs: [fetching-info, pre-qa-check]
     if: |
       !cancelled() &&
       needs.fetching-info.outputs.gtmetrix_url != '' &&
@@ -228,5 +226,6 @@ jobs:
     with:
       gtmetrix_url: ${{ needs.fetching-info.outputs.gtmetrix_url }}
       issue_url: ${{ needs.fetching-info.outputs.issue_url }}
+      comment_id: ${{ needs.fetching-info.outputs.comment_id }}
     secrets:
       GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}

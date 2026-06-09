@@ -5,6 +5,11 @@ name: FTP Deploy
 
 on:
   workflow_call:
+    inputs:
+      comment_id:
+        description: "Issue comment ID to update"
+        required: false
+        type: string
     secrets:
       FTP_SERVER:
         required: true
@@ -14,6 +19,7 @@ on:
         required: true
 permissions:
   contents: write
+  issues: write
 
 jobs:
   check-changes:
@@ -48,6 +54,19 @@ jobs:
             echo "$CHANGED"
             echo "has_changes=true" >> $GITHUB_OUTPUT
           fi
+
+      - name: Update comment — FTP skipped
+        if: steps.uploadcheck.outputs.has_changes == 'false' && inputs.comment_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_ID: ${{ inputs.comment_id }}
+        run: |
+          CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
+          echo "$CURRENT" > /tmp/current_body.txt
+          sed -i 's/FTP Deploy: In-Progress/FTP Deploy: Skipped/' /tmp/current_body.txt
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$(cat /tmp/current_body.txt)"
 
   deploy:
     name: Initialize FTP Deploy
@@ -203,3 +222,16 @@ jobs:
             tailwind.config.js
             package-lock.json
             package.json
+
+      - name: Update comment — FTP completed
+        if: inputs.comment_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_ID: ${{ inputs.comment_id }}
+        run: |
+          CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
+          echo "$CURRENT" > /tmp/current_body.txt
+          sed -i 's/FTP Deploy: In-Progress/FTP Deploy: Completed/' /tmp/current_body.txt
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$(cat /tmp/current_body.txt)"

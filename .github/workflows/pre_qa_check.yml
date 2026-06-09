@@ -6,7 +6,7 @@
 #   3. No duplicate filenames
 # Outputs: qa_passed, failure_message
 # -----------------------------------------------------------------------------
-name: QA Check
+name: Pre-Deployment QA
 
 on:
   workflow_call:
@@ -15,17 +15,21 @@ on:
         description: "GitHub issue URL to comment QA results on"
         required: false
         type: string
+      comment_id:
+        description: "Existing issue comment ID to update with QA results"
+        required: false
+        type: string
     outputs:
       qa_passed:
         description: "'true' if all checks passed, 'false' otherwise"
-        value: ${{ jobs.qa-check.outputs.qa_passed }}
+        value: ${{ jobs.pre-qa-check.outputs.qa_passed }}
       failure_message:
         description: "Summary of which checks failed"
-        value: ${{ jobs.qa-check.outputs.failure_message }}
+        value: ${{ jobs.pre-qa-check.outputs.failure_message }}
 
 jobs:
-  qa-check:
-    name: QA Validation
+  pre-qa-check:
+    name: Pre-Deployment QA
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,18 +39,18 @@ jobs:
       failure_message: ${{ steps.qa.outputs.failure_message }}
 
     steps:
-      - name: Comment Pre-Deployment QA in progress
-        if: inputs.issue_url != ''
-        id: progress_comment
+      - name: Update comment — Deployment completed
+        if: inputs.comment_id != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_ID: ${{ inputs.comment_id }}
         run: |
-          ISSUE_NUMBER=$(echo "${{ inputs.issue_url }}" | grep -oE '[0-9]+$')
-          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \
-            -X POST \
-            -f body="<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Pre-Deployment QA in progress" \
-            --jq '.id')
-          echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
+          CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
+          echo "$CURRENT" > /tmp/current_body.txt
+          sed -i '/| Deployment |/s/in-progress\.svg/completed.svg/' /tmp/current_body.txt
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$(cat /tmp/current_body.txt)"
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -184,21 +188,45 @@ jobs:
             echo EOF
           } >> "$GITHUB_OUTPUT"
 
-      - name: Comment QA result on issue
-        if: inputs.issue_url != '' && steps.progress_comment.outputs.comment_id != ''
+      - name: Update comment with QA result
+        if: inputs.comment_id != ''
         env:
-          GH_TOKEN:   ${{ github.token }}
-          COMMENT_ID: ${{ steps.progress_comment.outputs.comment_id }}
+          GH_TOKEN:        ${{ github.token }}
+          COMMENT_ID:      ${{ inputs.comment_id }}
           QA_PASSED:       ${{ steps.qa.outputs.qa_passed }}
           PASSED_CHECKS:   ${{ steps.qa.outputs.passed_checks }}
           FAILURE_MESSAGE: ${{ steps.qa.outputs.failure_message }}
         run: |
           if [ "$QA_PASSED" = "true" ]; then
-            BODY=$(printf '### Pre-Deployment QA Passed\n\n%s' "$PASSED_CHECKS")
+            QA_BADGE="completed"
+            printf 'Pre Quality Assurance: ✅ All checks passed\n%s' "$PASSED_CHECKS" > /tmp/qa_details.txt
           else
-            BODY=$(printf '### Pre-Deployment QA Failed\n\n**Passed:**\n%s\n\n**Failed:**\n%s' "$PASSED_CHECKS" "$FAILURE_MESSAGE")
+            QA_BADGE="failed"
+            printf 'Pre Quality Assurance Failed:\n```\n%s```' "$FAILURE_MESSAGE" > /tmp/qa_details.txt
           fi
 
+          CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
+          echo "$CURRENT" > /tmp/current_body.txt
+
+          cat > /tmp/update_qa.js << 'SCRIPT'
+          const fs = require('fs');
+          const base = 'https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images';
+          let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
+          const details = fs.readFileSync('/tmp/qa_details.txt', 'utf8').trim();
+          const badge = process.env.QA_BADGE;
+
+          body = body.replace(
+            /(\| Pre Quality Assurance \| ).*?( \|)/,
+            `$1<img src="${base}/${badge}.svg" height="28">$2`
+          );
+          body = body.replace(
+            /<!-- qa-details -->[\s\S]*?<!-- \/qa-details -->/,
+            `<!-- qa-details -->\n${details}\n<!-- /qa-details -->`
+          );
+          process.stdout.write(body);
+          SCRIPT
+
+          NEW_BODY=$(QA_BADGE="$QA_BADGE" node /tmp/update_qa.js)
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$BODY"
+            -f body="$NEW_BODY"

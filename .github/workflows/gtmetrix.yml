@@ -14,6 +14,10 @@ on:
         description: 'Issue URL to post results to'
         required: false
         type: string
+      comment_id:
+        description: 'Existing issue comment ID to update with GTmetrix results'
+        required: false
+        type: string
 
 jobs:
   gtmetrix:
@@ -28,18 +32,6 @@ jobs:
       actions: read
 
     steps:
-      - name: Comment GTmetrix in progress
-        id: progress_comment
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ISSUE_NUMBER=$(echo "${{ inputs.issue_url }}" | grep -oE '[0-9]+$')
-          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \
-            -X POST \
-            -f body="### <img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> GTmetrix Test Status" \
-            --jq '.id')
-          echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
-
       - name: Checkout caller repository
         uses: actions/checkout@v4
         with:
@@ -123,7 +115,7 @@ jobs:
           GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}
           GTMETRIX_URLS: ${{ steps.extract_url.outputs.gtmetrix_urls }}
           GH_TOKEN: ${{ github.token }}
-          COMMENT_ID: ${{ steps.progress_comment.outputs.comment_id }}
+          COMMENT_ID: ${{ inputs.comment_id }}
         run: |
           TMPFILE=$(mktemp)
           echo "[]" > "$TMPFILE"
@@ -132,24 +124,44 @@ jobs:
           COMPLETED_URLS=""
           FAILED_URLS=""
 
+          cat > /tmp/update_gtm_progress.js << 'SCRIPT'
+          const fs = require('fs');
+          const base = 'https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images';
+          let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
+          const details = fs.readFileSync('/tmp/gtm_progress.txt', 'utf8');
+          body = body.replace(
+            /(\| GT Metrix Test \| ).*?( \|)/,
+            `$1<img src="${base}/in-progress.svg" height="28">$2`
+          );
+          body = body.replace(
+            /<!-- gtmetrix-details -->[\s\S]*?<!-- \/gtmetrix-details -->/,
+            `<!-- gtmetrix-details -->\n${details}\n<!-- /gtmetrix-details -->`
+          );
+          process.stdout.write(body);
+          SCRIPT
+
           update_comment() {
             local CURRENT_URL="$1"
             local RUN_NUM="$2"
             [ -z "$COMMENT_ID" ] && return
-            local BODY="### <img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> GTmetrix Test Status\n\n"
+            local PROGRESS=""
             while IFS= read -r U; do
               [ -z "$U" ] && continue
               if printf '%s' "$COMPLETED_URLS" | grep -qF "$U"; then
-                BODY="${BODY}• ${U}\n  Status: ✅ Completed\n\n"
+                PROGRESS="${PROGRESS}- ✅ ${U}\n"
               elif [ "$U" = "$CURRENT_URL" ]; then
-                BODY="${BODY}• ${U}\n  Status: Running (${RUN_NUM}/${NUM_RUNS})\n\n"
+                PROGRESS="${PROGRESS}- 🔄 ${U} (${RUN_NUM}/${NUM_RUNS})\n"
               else
-                BODY="${BODY}• ${U}\n  Status: Waiting\n\n"
+                PROGRESS="${PROGRESS}- ⏳ ${U}\n"
               fi
             done <<< "$GTMETRIX_URLS"
+            gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
+              > /tmp/current_body.txt 2>/dev/null || return
+            printf '%b' "$PROGRESS" > /tmp/gtm_progress.txt
+            local NEW_BODY=$(node /tmp/update_gtm_progress.js)
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
-              -f body="$(printf '%b' "$BODY")" > /dev/null 2>&1 || true
+              -f body="$NEW_BODY" > /dev/null 2>&1 || true
           }
 
           while IFS= read -r URL; do
@@ -246,39 +258,58 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Post GTMetrix results to GitHub Issue
-        if: steps.run_tests.outputs.test_results != '' || steps.run_tests.outputs.failed_urls != ''
+        if: inputs.comment_id != '' && (steps.run_tests.outputs.test_results != '' || steps.run_tests.outputs.failed_urls != '')
         env:
           GH_TOKEN: ${{ github.token }}
           TEST_RESULTS: ${{ steps.run_tests.outputs.test_results }}
           FAILED_URLS: ${{ steps.run_tests.outputs.failed_urls }}
-          COMMENT_ID: ${{ steps.progress_comment.outputs.comment_id }}
+          COMMENT_ID: ${{ inputs.comment_id }}
         run: |
-          COMMENT_BODY=$(node -e "
+          node -e "
             const results = JSON.parse(process.env.TEST_RESULTS || '[]');
             const failedUrls = (process.env.FAILED_URLS || '').split('\n').filter(Boolean);
-
-            let body = '## GTMetrix Test Results\n\n';
-            body += 'Each URL was tested in GTMetrix 5 times and the best result was selected.\n\n';
-
+            let details = 'GT Metrix Test: Each URL tested 5 times, best result selected.\n\n';
             for (const r of results) {
-              body += '### ' + r.url + '\n';
-              body += '- Selected From: ' + (r.selected_from || 1) + ' test runs\n';
-              body += '- Grade: ' + r.grade + '\n';
-              body += '- Performance: ' + r.performance + '%\n';
-              body += '- Structure: ' + r.structure + '%\n\n';
+              details += '**' + r.url + '**\n';
+              details += '- Grade: ' + r.grade + '\n';
+              details += '- Performance: ' + r.performance + '%\n';
+              details += '- Structure: ' + r.structure + '%\n';
+              details += '- Runs: ' + (r.selected_from || 1) + '\n\n';
             }
-
             if (failedUrls.length) {
-              body += failedUrls.join('\n') + '\n\n';
-              body += '❌ Failed to test due to insufficient API credits. Please test the URLs in GTMetrix manually.\n';
+              details += failedUrls.join('\n') + '\n\n';
+              details += '❌ Failed to test — insufficient API credits. Please test manually.\n';
             }
+            process.stdout.write(details.trim());
+          " > /tmp/gtm_details.txt
 
-            process.stdout.write(body.trim());
-          ")
+          GTM_BADGE=$([ -s /tmp/gtm_details.txt ] && echo "completed" || echo "failed")
 
+          CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
+          echo "$CURRENT" > /tmp/current_body.txt
+
+          cat > /tmp/update_gtm.js << 'SCRIPT'
+          const fs = require('fs');
+          const base = 'https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images';
+          let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
+          const details = fs.readFileSync('/tmp/gtm_details.txt', 'utf8').trim();
+          const badge = process.env.GTM_BADGE;
+
+          body = body.replace(
+            /(\| GT Metrix Test \| ).*?( \|)/,
+            `$1<img src="${base}/${badge}.svg" height="28">$2`
+          );
+          body = body.replace(
+            /<!-- gtmetrix-details -->[\s\S]*?<!-- \/gtmetrix-details -->/,
+            `<!-- gtmetrix-details -->\n${details}\n<!-- /gtmetrix-details -->`
+          );
+          process.stdout.write(body);
+          SCRIPT
+
+          NEW_BODY=$(GTM_BADGE="$GTM_BADGE" node /tmp/update_gtm.js)
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$COMMENT_BODY"
+            -f body="$NEW_BODY"
 
       - name: Update GTmetrix history
         if: steps.extract_url.outputs.gtmetrix_urls != ''
