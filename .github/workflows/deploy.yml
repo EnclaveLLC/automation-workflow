@@ -1,12 +1,11 @@
 # -----------------------------------------------------------------------------
 # Workflow: Deploy (Reusable)
 # Steps:
-#   1.  Fetch PR Info
+#   1.  Fetch PR Info + post initial status comment
 #   2a. FTP deploy     ─┐ parallel (after PR Info)
-#   2b. AWS deploy     ─┘
-#   3.  Notify deploy complete
-#   4a. GTmetrix check ─┐ parallel (after deploys)
-#   4b. QA check       ─┘
+#   2b. AWS deploy     ─┘  each updates its own comment row on finish/skip
+#   3.  Pre QA check       (after deploys — marks Deployment row completed)
+#   4.  GTmetrix check     (after Pre QA)
 # -----------------------------------------------------------------------------
 name: Deploy
 
