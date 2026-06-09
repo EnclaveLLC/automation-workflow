@@ -133,6 +133,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           COMMENT_ID: ${{ inputs.comment_id }}
           BADGE_COMPLETED: ${{ inputs.badge_completed }}
+          BADGE_ABORTED: ${{ inputs.badge_aborted }}
           BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
           BADGE_WAITING: ${{ inputs.badge_waiting }}
         run: |
@@ -201,6 +202,36 @@ jobs:
               -f body="$NEW_BODY" > /dev/null 2>&1 || true
           }
 
+          cat > /tmp/abort_gtm.js << 'ABORTSCRIPT'
+          const fs = require('fs');
+          let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
+          const failedUrl = process.env.FAILED_URL;
+          const reason = process.env.ABORT_REASON;
+          const badgeAborted = process.env.BADGE_ABORTED;
+          body = body.replace(
+            /(\| GT Metrix Test \| )<img[^>]+>( \|)/,
+            `$1<img src="${badgeAborted}" width="120">$2`
+          );
+          const errorNote = `\n\n> ⚠️ **Test aborted:** ${failedUrl}\n> ${reason}`;
+          body = body.replace(
+            /(<!-- gtmetrix-details -->)([\s\S]*?)(<!-- \/gtmetrix-details -->)/,
+            (_, open, content, close) => `${open}${content.trimEnd()}${errorNote}\n${close}`
+          );
+          process.stdout.write(body);
+          ABORTSCRIPT
+
+          abort_comment() {
+            local FAILED_URL="$1"
+            local REASON="$2"
+            [ -z "$COMMENT_ID" ] && return
+            gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
+              > /tmp/current_body.txt 2>/dev/null || return
+            local NEW_BODY=$(FAILED_URL="$FAILED_URL" ABORT_REASON="$REASON" node /tmp/abort_gtm.js)
+            gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+              -X PATCH \
+              -f body="$NEW_BODY" || true
+          }
+
           while IFS= read -r URL; do
             [ -z "$URL" ] && continue
             echo "=== Testing: $URL (${NUM_RUNS} runs) ==="
@@ -211,11 +242,9 @@ jobs:
 
             for RUN in $(seq 1 $NUM_RUNS); do
               ELAPSED=$(( $(date +%s) - URL_START ))
-              if [ "$ELAPSED" -ge 180 ]; then
+              if [ "$ELAPSED" -ge 300 ]; then
                 echo "⏱️ Timeout: $URL has been running for ${ELAPSED}s — ending job."
-                gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
-                  -X PATCH \
-                  -f body="$(printf '### ⚠️ GTmetrix Test Issue\n\nSomething went wrong while testing:\n**%s**\n\nThe test has been running for over 5 minutes and was ended automatically.\nPlease test this URL in GTmetrix manually.' "$URL")"
+                abort_comment "$URL" "The test ran for over 5 minutes and was ended automatically. Please test this URL in GTmetrix manually."
                 exit 1
               fi
 
@@ -223,15 +252,13 @@ jobs:
               update_comment "$URL" "$RUN"
 
               GTMETRIX_EXIT=0
-              timeout 180 node automation-workflow/scripts/gtmetrix/gtmetrix.js "$URL" > /tmp/gtm_out.txt 2>&1 || GTMETRIX_EXIT=$?
+              timeout 300 node automation-workflow/scripts/gtmetrix/gtmetrix.js "$URL" > /tmp/gtm_out.txt 2>&1 || GTMETRIX_EXIT=$?
               OUTPUT=$(cat /tmp/gtm_out.txt)
               echo "$OUTPUT"
 
               if [ "$GTMETRIX_EXIT" -eq 124 ]; then
-                echo "⏱️ GTmetrix test for $URL timed out after 4.5 minutes — ending job."
-                gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
-                  -X PATCH \
-                  -f body="$(printf '### ⚠️ GTmetrix Test Issue\n\nSomething went wrong while testing:\n**%s**\n\nThe test has been running for over 5 minutes and was ended automatically.\nPlease test this URL in GTmetrix manually.' "$URL")"
+                echo "⏱️ GTmetrix test for $URL timed out after 5 minutes — ending job."
+                abort_comment "$URL" "The test ran for over 5 minutes and was ended automatically. Please test this URL in GTmetrix manually."
                 exit 1
               fi
 
