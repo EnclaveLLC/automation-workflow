@@ -19,6 +19,22 @@ on:
         description: "Existing issue comment ID to update with QA results"
         required: false
         type: string
+      badge_completed:
+        description: "Image URL for the completed status badge"
+        required: false
+        type: string
+      badge_aborted:
+        description: "Image URL for the aborted status badge"
+        required: false
+        type: string
+      badge_in_progress:
+        description: "Image URL for the in-progress status badge"
+        required: false
+        type: string
+      badge_waiting:
+        description: "Image URL for the waiting status badge"
+        required: false
+        type: string
     outputs:
       qa_passed:
         description: "'true' if all checks passed, 'false' otherwise"
@@ -44,10 +60,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           COMMENT_ID: ${{ inputs.comment_id }}
+          BADGE_COMPLETED: ${{ inputs.badge_completed }}
         run: |
           CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
           echo "$CURRENT" > /tmp/current_body.txt
-          sed -i '/| Deployment |/s/in-progress\.svg/completed.svg/' /tmp/current_body.txt
+          sed -i "/| Deployment |/s|src=\"[^\"]*\"|src=\"${BADGE_COMPLETED}\"|" /tmp/current_body.txt
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
             -f body="$(cat /tmp/current_body.txt)"
@@ -196,12 +213,14 @@ jobs:
           QA_PASSED:       ${{ steps.qa.outputs.qa_passed }}
           PASSED_CHECKS:   ${{ steps.qa.outputs.passed_checks }}
           FAILURE_MESSAGE: ${{ steps.qa.outputs.failure_message }}
+          BADGE_COMPLETED: ${{ inputs.badge_completed }}
+          BADGE_ABORTED:   ${{ inputs.badge_aborted }}
         run: |
           if [ "$QA_PASSED" = "true" ]; then
-            QA_BADGE="completed"
+            BADGE_URL="$BADGE_COMPLETED"
             printf 'Pre Quality Assurance: ✅ All checks passed\n%s' "$PASSED_CHECKS" > /tmp/qa_details.txt
           else
-            QA_BADGE="failed"
+            BADGE_URL="$BADGE_ABORTED"
             printf 'Pre Quality Assurance Failed:\n```\n%s```' "$FAILURE_MESSAGE" > /tmp/qa_details.txt
           fi
 
@@ -210,14 +229,13 @@ jobs:
 
           cat > /tmp/update_qa.js << 'SCRIPT'
           const fs = require('fs');
-          const base = 'https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images';
           let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
           const details = fs.readFileSync('/tmp/qa_details.txt', 'utf8').trim();
-          const badge = process.env.QA_BADGE;
+          const badgeUrl = process.env.BADGE_URL;
 
           body = body.replace(
-            /(\| Pre Quality Assurance \| ).*?( \|)/,
-            `$1<img src="${base}/${badge}.svg" height="28">$2`
+            /(\| Pre Quality Assurance \| )<img[^>]+>( \|)/,
+            `$1<img src="${badgeUrl}" width="120">$2`
           );
           body = body.replace(
             /<!-- qa-details -->[\s\S]*?<!-- \/qa-details -->/,
@@ -226,7 +244,7 @@ jobs:
           process.stdout.write(body);
           SCRIPT
 
-          NEW_BODY=$(QA_BADGE="$QA_BADGE" node /tmp/update_qa.js)
+          NEW_BODY=$(BADGE_URL="$BADGE_URL" node /tmp/update_qa.js)
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
             -f body="$NEW_BODY"

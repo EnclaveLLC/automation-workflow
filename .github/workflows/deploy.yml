@@ -24,6 +24,26 @@ on:
         description: "PR body"
         required: false
         type: string
+      badge_completed:
+        description: "Image URL for the completed status badge"
+        required: false
+        type: string
+        default: "https://uploads.linear.app/4bc00d3f-d924-4928-a0c1-3397413d38b5/8236ca14-4ace-4f27-be74-f1a26ecf2c1c/3c8bbc4d-fc7b-4b53-a00f-63a01090d9a4"
+      badge_aborted:
+        description: "Image URL for the aborted status badge"
+        required: false
+        type: string
+        default: "https://uploads.linear.app/4bc00d3f-d924-4928-a0c1-3397413d38b5/d5284804-f2a1-444e-9eea-9d21af8aca84/6ef490f7-91d6-4e04-b3d0-5814d930af41"
+      badge_in_progress:
+        description: "Image URL for the in-progress status badge"
+        required: false
+        type: string
+        default: "https://uploads.linear.app/4bc00d3f-d924-4928-a0c1-3397413d38b5/da37ce3d-73e1-41bc-8b01-fb9ca9b59310/15d2efec-5d49-48ca-aa3c-e3dfa5766f33"
+      badge_waiting:
+        description: "Image URL for the waiting status badge"
+        required: false
+        type: string
+        default: "https://uploads.linear.app/4bc00d3f-d924-4928-a0c1-3397413d38b5/32ff1d1c-810d-4aac-a265-31545ea812e7/751c6d5a-f43a-4b62-8cc1-617a293e0d1c"
     secrets:
       FTP_SERVER:
         required: false
@@ -118,20 +138,30 @@ jobs:
         if: steps.extract.outputs.issue_url != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          BADGE_COMPLETED: ${{ inputs.badge_completed }}
+          BADGE_ABORTED: ${{ inputs.badge_aborted }}
+          BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
+          BADGE_WAITING: ${{ inputs.badge_waiting }}
         run: |
           ISSUE_NUMBER=$(echo "${{ steps.extract.outputs.issue_url }}" | grep -oE '[0-9]+$')
 
           cat > /tmp/initial_comment.js << 'SCRIPT'
-          const base = 'https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images';
           const title = process.env.PR_TITLE || '';
+          const badges = {
+            completed:  process.env.BADGE_COMPLETED,
+            aborted:    process.env.BADGE_ABORTED,
+            inProgress: process.env.BADGE_IN_PROGRESS,
+            waiting:    process.env.BADGE_WAITING,
+          };
           const lines = [
-            '## <img src="${base}/loading.svg" height="28"> Standard Workflow: ' + title,
+            '## Standard Workflow: ' + title + ' In-Progress',
             '',
+            '<!-- linear:table-colwidths:215,154 -->',
             '| Step | Status |',
             '|:---|:---|',
-            `| Deployment | <img src="${base}/in-progress.svg" height="28"> |`,
-            `| Pre Quality Assurance | <img src="${base}/waiting.svg" height="28"> |`,
-            `| GT Metrix Test | <img src="${base}/waiting.svg" height="28"> |`,
+            `| Deployment | <img src="${badges.inProgress}" width="120"> |`,
+            `| Pre Quality Assurance | <img src="${badges.waiting}" width="120"> |`,
+            `| GT Metrix Test | <img src="${badges.waiting}" width="120"> |`,
             '',
             '---',
             '### Deployment Details',
@@ -201,6 +231,10 @@ jobs:
     with:
       issue_url: ${{ needs.fetching-info.outputs.issue_url }}
       comment_id: ${{ needs.fetching-info.outputs.comment_id }}
+      badge_completed: ${{ inputs.badge_completed }}
+      badge_aborted: ${{ inputs.badge_aborted }}
+      badge_in_progress: ${{ inputs.badge_in_progress }}
+      badge_waiting: ${{ inputs.badge_waiting }}
     permissions:
       contents: read
       issues: write
@@ -226,5 +260,9 @@ jobs:
       gtmetrix_url: ${{ needs.fetching-info.outputs.gtmetrix_url }}
       issue_url: ${{ needs.fetching-info.outputs.issue_url }}
       comment_id: ${{ needs.fetching-info.outputs.comment_id }}
+      badge_completed: ${{ inputs.badge_completed }}
+      badge_aborted: ${{ inputs.badge_aborted }}
+      badge_in_progress: ${{ inputs.badge_in_progress }}
+      badge_waiting: ${{ inputs.badge_waiting }}
     secrets:
       GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}

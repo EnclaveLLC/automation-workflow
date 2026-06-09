@@ -18,6 +18,22 @@ on:
         description: 'Existing issue comment ID to update with GTmetrix results'
         required: false
         type: string
+      badge_completed:
+        description: 'Image URL for the completed status badge'
+        required: false
+        type: string
+      badge_aborted:
+        description: 'Image URL for the aborted status badge'
+        required: false
+        type: string
+      badge_in_progress:
+        description: 'Image URL for the in-progress status badge'
+        required: false
+        type: string
+      badge_waiting:
+        description: 'Image URL for the waiting status badge'
+        required: false
+        type: string
 
 jobs:
   gtmetrix:
@@ -116,6 +132,9 @@ jobs:
           GTMETRIX_URLS: ${{ steps.extract_url.outputs.gtmetrix_urls }}
           GH_TOKEN: ${{ github.token }}
           COMMENT_ID: ${{ inputs.comment_id }}
+          BADGE_COMPLETED: ${{ inputs.badge_completed }}
+          BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
+          BADGE_WAITING: ${{ inputs.badge_waiting }}
         run: |
           TMPFILE=$(mktemp)
           echo "[]" > "$TMPFILE"
@@ -126,16 +145,29 @@ jobs:
 
           cat > /tmp/update_gtm_progress.js << 'SCRIPT'
           const fs = require('fs');
-          const base = 'https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images';
           let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
-          const details = fs.readFileSync('/tmp/gtm_progress.txt', 'utf8');
+          const statusData = JSON.parse(fs.readFileSync('/tmp/gtm_status.json', 'utf8'));
+          const badgeMap = {
+            completed:   process.env.BADGE_COMPLETED,
+            in_progress: process.env.BADGE_IN_PROGRESS,
+            waiting:     process.env.BADGE_WAITING,
+          };
+          const rows = statusData.map(row => {
+            const badge = badgeMap[row.status] || badgeMap.waiting;
+            return `| ${row.url} | <img src="${badge}" width="120"> | - | - | - |`;
+          });
+          const table = [
+            '| URL | Status | Grade | Performance | Structure |',
+            '|:---|:---|:---:|:---:|:---:|',
+            ...rows,
+          ].join('\n');
           body = body.replace(
-            /(\| GT Metrix Test \| ).*?( \|)/,
-            `$1<img src="${base}/in-progress.svg" height="28">$2`
+            /(\| GT Metrix Test \| )<img[^>]+>( \|)/,
+            `$1<img src="${process.env.BADGE_IN_PROGRESS}" width="120">$2`
           );
           body = body.replace(
             /<!-- gtmetrix-details -->[\s\S]*?<!-- \/gtmetrix-details -->/,
-            `<!-- gtmetrix-details -->\n${details}\n<!-- /gtmetrix-details -->`
+            `<!-- gtmetrix-details -->\n${table}\n<!-- /gtmetrix-details -->`
           );
           process.stdout.write(body);
           SCRIPT
@@ -144,20 +176,25 @@ jobs:
             local CURRENT_URL="$1"
             local RUN_NUM="$2"
             [ -z "$COMMENT_ID" ] && return
-            local PROGRESS=""
+            local STATUS_JSON="["
+            local SEP=""
             while IFS= read -r U; do
               [ -z "$U" ] && continue
+              local S
               if printf '%s' "$COMPLETED_URLS" | grep -qF "$U"; then
-                PROGRESS="${PROGRESS}- ✅ ${U}\n"
+                S="completed"
               elif [ "$U" = "$CURRENT_URL" ]; then
-                PROGRESS="${PROGRESS}- 🔄 ${U} (${RUN_NUM}/${NUM_RUNS})\n"
+                S="in_progress"
               else
-                PROGRESS="${PROGRESS}- ⏳ ${U}\n"
+                S="waiting"
               fi
+              STATUS_JSON="${STATUS_JSON}${SEP}{\"url\":\"${U}\",\"status\":\"${S}\"}"
+              SEP=","
             done <<< "$GTMETRIX_URLS"
+            STATUS_JSON="${STATUS_JSON}]"
+            echo "$STATUS_JSON" > /tmp/gtm_status.json
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
               > /tmp/current_body.txt 2>/dev/null || return
-            printf '%b' "$PROGRESS" > /tmp/gtm_progress.txt
             local NEW_BODY=$(node /tmp/update_gtm_progress.js)
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
@@ -264,24 +301,31 @@ jobs:
           TEST_RESULTS: ${{ steps.run_tests.outputs.test_results }}
           FAILED_URLS: ${{ steps.run_tests.outputs.failed_urls }}
           COMMENT_ID: ${{ inputs.comment_id }}
+          BADGE_COMPLETED: ${{ inputs.badge_completed }}
+          BADGE_ABORTED: ${{ inputs.badge_aborted }}
         run: |
-          node -e "
-            const results = JSON.parse(process.env.TEST_RESULTS || '[]');
-            const failedUrls = (process.env.FAILED_URLS || '').split('\n').filter(Boolean);
-            let details = 'GT Metrix Test: Each URL tested 5 times, best result selected.\n\n';
-            for (const r of results) {
-              details += '**' + r.url + '**\n';
-              details += '- Grade: ' + r.grade + '\n';
-              details += '- Performance: ' + r.performance + '%\n';
-              details += '- Structure: ' + r.structure + '%\n';
-              details += '- Runs: ' + (r.selected_from || 1) + '\n\n';
-            }
-            if (failedUrls.length) {
-              details += failedUrls.join('\n') + '\n\n';
-              details += '❌ Failed to test — insufficient API credits. Please test manually.\n';
-            }
-            process.stdout.write(details.trim());
-          " > /tmp/gtm_details.txt
+          cat > /tmp/build_gtm_table.js << 'SCRIPT'
+          const results = JSON.parse(process.env.TEST_RESULTS || '[]');
+          const failedUrls = (process.env.FAILED_URLS || '').split('\n').filter(Boolean);
+          const rows = [];
+          for (const r of results) {
+            rows.push(`| ${r.url} | <img src="${process.env.BADGE_COMPLETED}" width="120"> | ${r.grade} | ${r.performance}% | ${r.structure}% |`);
+          }
+          for (const url of failedUrls) {
+            rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120"> | - | - | - |`);
+          }
+          let output = [
+            '| URL | Status | Grade | Performance | Structure |',
+            '|:---|:---|:---:|:---:|:---:|',
+            ...rows,
+          ].join('\n');
+          if (failedUrls.length) {
+            output += '\n\n> ❌ **Failed to test** — insufficient API credits. Please test the following URLs manually:\n';
+            output += failedUrls.map(u => `> - ${u}`).join('\n');
+          }
+          process.stdout.write(output);
+          SCRIPT
+          node /tmp/build_gtm_table.js > /tmp/gtm_details.txt
 
           GTM_BADGE=$([ -s /tmp/gtm_details.txt ] && echo "completed" || echo "failed")
 
@@ -290,14 +334,15 @@ jobs:
 
           cat > /tmp/update_gtm.js << 'SCRIPT'
           const fs = require('fs');
-          const base = 'https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images';
           let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
           const details = fs.readFileSync('/tmp/gtm_details.txt', 'utf8').trim();
-          const badge = process.env.GTM_BADGE;
+          const badgeUrl = process.env.GTM_BADGE === 'completed'
+            ? process.env.BADGE_COMPLETED
+            : process.env.BADGE_ABORTED;
 
           body = body.replace(
-            /(\| GT Metrix Test \| ).*?( \|)/,
-            `$1<img src="${base}/${badge}.svg" height="28">$2`
+            /(\| GT Metrix Test \| )<img[^>]+>( \|)/,
+            `$1<img src="${badgeUrl}" width="120">$2`
           );
           body = body.replace(
             /<!-- gtmetrix-details -->[\s\S]*?<!-- \/gtmetrix-details -->/,
