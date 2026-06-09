@@ -139,7 +139,7 @@ jobs:
             'FTP Deploy: In-Progress',
             'AWS Deploy: In-Progress',
             '```',
-            '---'
+            '---',
             '<!-- qa-details -->',
             '<!-- /qa-details -->',
             '<!-- gtmetrix-details -->',
