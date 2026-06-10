@@ -143,6 +143,7 @@ jobs:
           NUM_RUNS=5
           COMPLETED_URLS=""
           FAILED_URLS=""
+          ABORTED_URLS=""
 
           cat > /tmp/update_gtm_progress.js << 'SCRIPT'
           const fs = require('fs');
@@ -152,6 +153,7 @@ jobs:
             completed:   process.env.BADGE_COMPLETED,
             in_progress: process.env.BADGE_IN_PROGRESS,
             waiting:     process.env.BADGE_WAITING,
+            aborted:     process.env.BADGE_ABORTED,
           };
           const rows = statusData.map(row => {
             const badge = badgeMap[row.status] || badgeMap.waiting;
@@ -182,7 +184,9 @@ jobs:
             while IFS= read -r U; do
               [ -z "$U" ] && continue
               local S
-              if printf '%s' "$COMPLETED_URLS" | grep -qF "$U"; then
+              if printf '%s' "$ABORTED_URLS" | grep -qF "$U"; then
+                S="aborted"
+              elif printf '%s' "$COMPLETED_URLS" | grep -qF "$U"; then
                 S="completed"
               elif [ "$U" = "$CURRENT_URL" ]; then
                 S="in_progress"
@@ -202,41 +206,6 @@ jobs:
               -f body="$NEW_BODY" > /dev/null 2>&1 || true
           }
 
-          cat > /tmp/abort_gtm.js << 'ABORTSCRIPT'
-          const fs = require('fs');
-          let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
-          const failedUrl = process.env.FAILED_URL;
-          const reason = process.env.ABORT_REASON;
-          const badgeAborted = process.env.BADGE_ABORTED;
-          // Update GT Metrix Test header row badge
-          body = body.replace(
-            /(\| GT Metrix Test \| )<img[^>]+>( \|)/,
-            `$1<img src="${badgeAborted}" width="120">$2`
-          );
-          // Update all URL row badges inside the section + append error note
-          body = body.replace(
-            /(<!-- gtmetrix-details -->)([\s\S]*?)(<!-- \/gtmetrix-details -->)/,
-            (_, open, content, close) => {
-              const updated = content.replace(/<img[^>]+>/g, `<img src="${badgeAborted}" width="120">`);
-              const errorNote = `\n\n> ⚠️ **Test aborted:** ${failedUrl}\n> ${reason}`;
-              return `${open}${updated.trimEnd()}${errorNote}\n${close}`;
-            }
-          );
-          process.stdout.write(body);
-          ABORTSCRIPT
-
-          abort_comment() {
-            local FAILED_URL="$1"
-            local REASON="$2"
-            [ -z "$COMMENT_ID" ] && return
-            gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
-              > /tmp/current_body.txt 2>/dev/null || return
-            local NEW_BODY=$(FAILED_URL="$FAILED_URL" ABORT_REASON="$REASON" node /tmp/abort_gtm.js)
-            gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
-              -X PATCH \
-              -f body="$NEW_BODY" || true
-          }
-
           while IFS= read -r URL; do
             [ -z "$URL" ] && continue
             echo "=== Testing: $URL (${NUM_RUNS} runs) ==="
@@ -244,13 +213,16 @@ jobs:
             RUNS_FILE=$(mktemp)
             echo "[]" > "$RUNS_FILE"
             URL_START=$(date +%s)
+            URL_ABORTED=false
 
             for RUN in $(seq 1 $NUM_RUNS); do
               ELAPSED=$(( $(date +%s) - URL_START ))
               if [ "$ELAPSED" -ge 300 ]; then
-                echo "⏱️ Timeout: $URL has been running for ${ELAPSED}s — ending job."
-                abort_comment "$URL" "The test ran for over 5 minutes and was ended automatically. Please test this URL in GTmetrix manually."
-                exit 1
+                echo "⚠️ Test aborted: $URL"
+                echo "The test ran for over 5 minutes and was ended automatically. Please test this URL in GTmetrix manually."
+                ABORTED_URLS="${ABORTED_URLS:+$ABORTED_URLS$'\n'}$URL"
+                URL_ABORTED=true
+                break
               fi
 
               echo "--- Run $RUN / $NUM_RUNS ---"
@@ -262,9 +234,11 @@ jobs:
               echo "$OUTPUT"
 
               if [ "$GTMETRIX_EXIT" -eq 124 ]; then
-                echo "⏱️ GTmetrix test for $URL timed out after 5 minutes — ending job."
-                abort_comment "$URL" "The test ran for over 5 minutes and was ended automatically. Please test this URL in GTmetrix manually."
-                exit 1
+                echo "⚠️ Test aborted: $URL"
+                echo "The test ran for over 5 minutes and was ended automatically. Please test this URL in GTmetrix manually."
+                ABORTED_URLS="${ABORTED_URLS:+$ABORTED_URLS$'\n'}$URL"
+                URL_ABORTED=true
+                break
               fi
 
               JSON_ENTRY=$(echo "$OUTPUT" | grep '^RESULT_JSON:' | sed 's/^RESULT_JSON://')
@@ -284,6 +258,11 @@ jobs:
                 echo "⚠️  Run $RUN produced no result — skipping."
               fi
             done
+
+            if [ "$URL_ABORTED" = "true" ]; then
+              update_comment "" ""
+              continue
+            fi
 
             COMPLETED_URLS=$(printf '%s%s\n' "$COMPLETED_URLS" "$URL")
 
@@ -325,13 +304,19 @@ jobs:
             printf '%s\n' "$FAILED_URLS"
             echo EOF
           } >> "$GITHUB_OUTPUT"
+          {
+            echo 'aborted_urls<<EOF'
+            printf '%s\n' "$ABORTED_URLS"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
 
       - name: Post GTMetrix results to GitHub Issue
-        if: inputs.comment_id != '' && (steps.run_tests.outputs.test_results != '' || steps.run_tests.outputs.failed_urls != '')
+        if: inputs.comment_id != '' && (steps.run_tests.outputs.test_results != '' || steps.run_tests.outputs.failed_urls != '' || steps.run_tests.outputs.aborted_urls != '')
         env:
           GH_TOKEN: ${{ github.token }}
           TEST_RESULTS: ${{ steps.run_tests.outputs.test_results }}
           FAILED_URLS: ${{ steps.run_tests.outputs.failed_urls }}
+          ABORTED_URLS: ${{ steps.run_tests.outputs.aborted_urls }}
           COMMENT_ID: ${{ inputs.comment_id }}
           BADGE_COMPLETED: ${{ inputs.badge_completed }}
           BADGE_ABORTED: ${{ inputs.badge_aborted }}
@@ -339,9 +324,13 @@ jobs:
           cat > /tmp/build_gtm_table.js << 'SCRIPT'
           const results = JSON.parse(process.env.TEST_RESULTS || '[]');
           const failedUrls = (process.env.FAILED_URLS || '').split('\n').filter(Boolean);
+          const abortedUrls = (process.env.ABORTED_URLS || '').split('\n').filter(Boolean);
           const rows = [];
           for (const r of results) {
             rows.push(`| ${r.url} | <img src="${process.env.BADGE_COMPLETED}" width="120"> | ${r.grade} | ${r.performance}% | ${r.structure}% |`);
+          }
+          for (const url of abortedUrls) {
+            rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120"> | - | - | - |`);
           }
           for (const url of failedUrls) {
             rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120"> | - | - | - |`);
@@ -353,6 +342,11 @@ jobs:
             '|:---|:---|:---:|:---:|:---:|',
             ...rows,
           ].join('\n');
+          if (abortedUrls.length) {
+            output += '\n\n' + abortedUrls.map(u =>
+              `> ⚠️ **Test aborted:** ${u}\n> The test ran for over 5 minutes and was ended automatically. Please test this URL in GTmetrix manually.`
+            ).join('\n\n');
+          }
           if (failedUrls.length) {
             output += '\n\n> ❌ **Failed to test** — insufficient API credits. Please test the following URLs manually:\n';
             output += failedUrls.map(u => `> - ${u}`).join('\n');
