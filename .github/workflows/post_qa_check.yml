@@ -97,14 +97,14 @@ jobs:
               'Meta Pixel ID verified',
             ];
 
-            let details = '### Post Quality Assurance\n\n';
+            let details = '---\n### Post Quality Assurance\n\n';
             for (const url of urls) {
               details += 'Page: ' + url + '\n\n';
               details += '<!-- linear:table-colwidths:215,154 -->\n';
               details += '| Post QA Items | Status |\n';
               details += '|:---|:---|\n';
               for (const check of checks) {
-                details += '| ' + check + ' | <img src="' + process.env.BADGE_IN_PROGRESS + '" width="120"> |\n';
+                details += '| ' + check + ' | <img src=\"' + process.env.BADGE_IN_PROGRESS + '\" width=\"120\"> |\n';
               }
               details += '\n';
             }
@@ -258,7 +258,7 @@ jobs:
             tablesMd += '\n';
           }
 
-          const header = `### Post Quality Assurance ${allPassed ? 'Passed:' : 'Failed:'}\n\n`;
+          const header = `---\n### Post Quality Assurance ${allPassed ? 'Passed:' : 'Failed:'}\n\n`;
           const fullDetails = (header + tablesMd).trim();
 
           let output = `qa_passed=${allPassed}\n`;
