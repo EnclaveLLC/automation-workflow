@@ -261,7 +261,7 @@ jobs:
 
             for RUN in $(seq 1 $NUM_RUNS); do
               ELAPSED=$(( $(date +%s) - URL_START ))
-              if [ "$ELAPSED" -ge 300 ]; then
+              if [ "$ELAPSED" -ge 600 ]; then
                 echo "⚠️ Test aborted: $URL"
                 echo "The test ran for over 5 minutes and was ended automatically. Please test this URL in GTmetrix manually."
                 ABORTED_URLS="${ABORTED_URLS:+$ABORTED_URLS$'\n'}$URL"
@@ -273,7 +273,7 @@ jobs:
               update_comment "$URL" "$RUN"
 
               GTMETRIX_EXIT=0
-              timeout 300 node automation-workflow/scripts/gtmetrix/gtmetrix.js "$URL" > /tmp/gtm_out.txt 2>&1 || GTMETRIX_EXIT=$?
+              timeout 600 node automation-workflow/scripts/gtmetrix/gtmetrix.js "$URL" > /tmp/gtm_out.txt 2>&1 || GTMETRIX_EXIT=$?
               OUTPUT=$(cat /tmp/gtm_out.txt)
               echo "$OUTPUT"
 
