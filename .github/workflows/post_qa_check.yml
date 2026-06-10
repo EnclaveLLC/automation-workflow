@@ -52,6 +52,8 @@ jobs:
     permissions:
       contents: read
       issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     outputs:
       qa_passed:       ${{ steps.check.outputs.qa_passed }}
       failure_message: ${{ steps.check.outputs.failure_message }}
@@ -60,7 +62,6 @@ jobs:
       - name: Initialize Post-QA status in comment
         if: inputs.comment_id != ''
         env:
-          GH_TOKEN:          ${{ github.token }}
           COMMENT_ID:        ${{ inputs.comment_id }}
           BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
         run: |
@@ -195,7 +196,6 @@ jobs:
       - name: Update comment with Post-QA result
         if: inputs.comment_id != ''
         env:
-          GH_TOKEN:        ${{ github.token }}
           COMMENT_ID:      ${{ inputs.comment_id }}
           QA_PASSED:       ${{ steps.check.outputs.qa_passed }}
           PASSED_CHECKS:   ${{ steps.check.outputs.passed_checks }}

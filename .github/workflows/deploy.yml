@@ -311,11 +311,8 @@ jobs:
       needs.fetching-info.outputs.gtmetrix_url != '' &&
       needs.fetching-info.outputs.issue_url != ''
     permissions:
-      actions: read
-      contents: write
+      contents: read
       issues: write
-      pull-requests: read
-      id-token: write
     uses: ./.github/workflows/post_qa_check.yml
     with:
       urls: ${{ needs.fetching-info.outputs.gtmetrix_url }}
