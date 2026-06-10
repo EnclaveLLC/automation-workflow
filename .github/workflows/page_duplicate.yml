@@ -44,9 +44,10 @@ jobs:
 
       - name: Parse issue body
         id: parse
-        env:
-          ISSUE_BODY: ${{ github.event.issue.body }}
-        run: node EnclaveLLC/automation-workflow/scripts/page_duplicate/parse-issue.js
+        run: |
+          ISSUE_BODY=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }} --jq '.body')
+          export ISSUE_BODY
+          node EnclaveLLC/automation-workflow/scripts/page_duplicate/parse-issue.js
 
   # ── Job 2: Verify duplicate path does not already exist ───────────────────
   check-duplicate-path:
