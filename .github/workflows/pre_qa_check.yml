@@ -35,6 +35,10 @@ on:
         description: "Image URL for the waiting status badge"
         required: false
         type: string
+      badge_failed:
+        description: "Image URL for the failed status badge"
+        required: false
+        type: string
     outputs:
       qa_passed:
         description: "'true' if all checks passed, 'false' otherwise"
@@ -217,12 +221,13 @@ jobs:
           FAILURE_MESSAGE: ${{ steps.qa.outputs.failure_message }}
           BADGE_COMPLETED: ${{ inputs.badge_completed }}
           BADGE_ABORTED:   ${{ inputs.badge_aborted }}
+          BADGE_FAILED:    ${{ inputs.badge_failed }}
         run: |
           if [ "$QA_PASSED" = "true" ]; then
             BADGE_URL="$BADGE_COMPLETED"
-            printf '### Pre Quality Assurance: ✅ All checks passed\n%s' "$PASSED_CHECKS" > /tmp/qa_details.txt
+            printf '### Pre Quality Assurance: \n\n All checks passed\n%s' "$PASSED_CHECKS" > /tmp/qa_details.txt
           else
-            BADGE_URL="$BADGE_COMPLETED"
+            BADGE_URL="$BADGE_FAILED"
             printf '### Pre Quality Assurance Failed:\n```\n%s```' "$FAILURE_MESSAGE" > /tmp/qa_details.txt
           fi
 

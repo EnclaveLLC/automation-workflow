@@ -40,6 +40,14 @@ on:
         description: "Image URL for the waiting status badge"
         required: false
         type: string
+      badge_passed:
+        description: "Image URL for the passed status badge"
+        required: false
+        type: string
+      badge_failed:
+        description: "Image URL for the failed status badge"
+        required: false
+        type: string
     outputs:
       qa_passed:
         description: "'true' if all checks passed, 'false' otherwise"
@@ -89,13 +97,14 @@ jobs:
               'Meta Pixel ID verified',
             ];
 
-            let details = '### Post Quality Assurance In Progress\n\n';
+            let details = '### Post Quality Assurance\n\n';
             for (const url of urls) {
               details += 'Page: ' + url + '\n\n';
+              details += '<!-- linear:table-colwidths:215,154 -->';
               details += '| Post QA Items | Status |\n';
               details += '|:---|:---|\n';
               for (const check of checks) {
-                details += '| ' + check + ' | In Progress |\n';
+                details += '| ' + check + ' | <img src="' + process.env.BADGE_IN_PROGRESS + '" width="120"> |\n';
               }
               details += '\n';
             }
@@ -121,7 +130,9 @@ jobs:
       - name: Run Post-QA checks via Playwright
         id: check
         env:
-          URLS: ${{ inputs.urls }}
+          URLS:         ${{ inputs.urls }}
+          BADGE_PASSED: ${{ inputs.badge_passed }}
+          BADGE_FAILED: ${{ inputs.badge_failed }}
         run: |
           cat > /tmp/check_post_qa.js << 'SCRIPT'
           const { chromium } = require('playwright');
@@ -230,9 +241,14 @@ jobs:
             const pagePassed = imageSizeOk && robotsOk && gtmOk && pixelOk;
             if (!pagePassed) allPassed = false;
 
-            const status = ok => ok ? 'Passed' : 'Failed';
+            const badgePassed = process.env.BADGE_PASSED;
+            const badgeFailed = process.env.BADGE_FAILED;
+            const status = ok => ok
+              ? '<img src="' + badgePassed + '" width="120">'
+              : '<img src="' + badgeFailed + '" width="120">';
 
             tablesMd += `Page: ${r.pageUrl}\n\n`;
+            tablesMd += '<!-- linear:table-colwidths:215,154 -->';
             tablesMd += `| Post QA Items | Status |\n`;
             tablesMd += `|:---|:---|\n`;
             tablesMd += `| Image less than 1MB | ${status(imageSizeOk)} |\n`;
@@ -259,11 +275,11 @@ jobs:
           COMMENT_ID:      ${{ inputs.comment_id }}
           QA_PASSED:       ${{ steps.check.outputs.qa_passed }}
           POST_QA_DETAILS: ${{ steps.check.outputs.post_qa_details }}
-          BADGE_COMPLETED: ${{ inputs.badge_completed }}
-          BADGE_ABORTED:   ${{ inputs.badge_aborted }}
+          BADGE_PASSED:    ${{ inputs.badge_passed }}
+          BADGE_FAILED:    ${{ inputs.badge_failed }}
         run: |
-          BADGE_URL="$BADGE_ABORTED"
-          [ "$QA_PASSED" = "true" ] && BADGE_URL="$BADGE_COMPLETED"
+          BADGE_URL="$BADGE_FAILED"
+          [ "$QA_PASSED" = "true" ] && BADGE_URL="$BADGE_PASSED"
 
           CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
           echo "$CURRENT" > /tmp/current_body.txt

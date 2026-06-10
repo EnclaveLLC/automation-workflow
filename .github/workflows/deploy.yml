@@ -44,6 +44,16 @@ on:
         required: false
         type: string
         default: "https://uploads.linear.app/4bc00d3f-d924-4928-a0c1-3397413d38b5/32ff1d1c-810d-4aac-a265-31545ea812e7/751c6d5a-f43a-4b62-8cc1-617a293e0d1c"
+      badge_passed:
+        description: "Image URL for the passed status badge"
+        required: false
+        type: string
+        default: "https://uploads.linear.app/4bc00d3f-d924-4928-a0c1-3397413d38b5/87048c18-a3eb-4395-a1ff-42ce3c6e874e/400d6abc-6ae3-4dc8-88c0-2181c3c6f63d"
+      badge_failed:
+        description: "Image URL for the failed status badge"
+        required: false
+        type: string
+        default: "https://uploads.linear.app/4bc00d3f-d924-4928-a0c1-3397413d38b5/ff681cf1-6a2d-4a5a-963d-03e23b8e719a/5ac65e21-673d-480c-abc4-c955ab10e8ed"
     secrets:
       FTP_SERVER:
         required: false
@@ -268,6 +278,7 @@ jobs:
       badge_aborted: ${{ inputs.badge_aborted }}
       badge_in_progress: ${{ inputs.badge_in_progress }}
       badge_waiting: ${{ inputs.badge_waiting }}
+      badge_failed: ${{ inputs.badge_failed }}
     permissions:
       contents: read
       issues: write
@@ -322,6 +333,8 @@ jobs:
       badge_aborted: ${{ inputs.badge_aborted }}
       badge_in_progress: ${{ inputs.badge_in_progress }}
       badge_waiting: ${{ inputs.badge_waiting }}
+      badge_passed: ${{ inputs.badge_passed }}
+      badge_failed: ${{ inputs.badge_failed }}
 
   # ---------------------------------------------------------------------------
   # Job 5: Mark workflow completed (runs after GTmetrix)
