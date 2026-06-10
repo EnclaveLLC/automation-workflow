@@ -70,6 +70,7 @@ jobs:
             const table = [
               '---',
               '### GTmetrix Performance Test',
+              '<!-- linear:table-colwidths:298,130,65,111,95 -->',
               '| URL | Status | Grade | Performance | Structure |',
               '|:---|:---|:---:|:---:|:---:|',
               ...rows,
@@ -202,6 +203,7 @@ jobs:
           const table = [
             '---',
             '### GTmetrix Performance Test',
+            '<!-- linear:table-colwidths:298,130,65,111,95 -->',
             '| URL | Status | Grade | Performance | Structure |',
             '|:---|:---|:---:|:---:|:---:|',
             ...rows,
