@@ -27,7 +27,7 @@ jobs:
       - name: Comment page duplication in progress
         id: progress_comment
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
             -X POST \
@@ -40,7 +40,7 @@ jobs:
         with:
           repository: EnclaveLLC/automation-workflow
           path: EnclaveLLC/automation-workflow
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Parse issue body
         id: parse
@@ -62,14 +62,14 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 1
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Pull latest changes
         run: git pull origin ${{ github.event.repository.default_branch }}
 
       - name: Check if duplicate path already exists
         env:
-          GH_TOKEN:       ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN:       ${{ github.token }}
           DUPLICATE_PATH: ${{ needs.parse-issue.outputs.duplicate_path }}
           COMMENT_ID:     ${{ needs.parse-issue.outputs.comment_id }}
         run: |
@@ -94,6 +94,7 @@ jobs:
       pull-requests: write
 
     env:
+      GH_TOKEN:    ${{ github.token }}
       ISSUE_TITLE: ${{ github.event.issue.title }}
 
     steps:
@@ -114,7 +115,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Pull latest changes
         run: |
@@ -141,7 +142,7 @@ jobs:
         with:
           repository: EnclaveLLC/automation-workflow
           path: EnclaveLLC/automation-workflow
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
 
       # ── Duplicate folder ─────────────────────────────────────────────────────
       - name: Debug paths
@@ -219,7 +220,6 @@ jobs:
       - name: Create pull request
         id: create_pr
         env:
-          GH_TOKEN:      ${{ secrets.GITHUB_TOKEN }}
           GTMETRIX_URLS: ${{ needs.parse-issue.outputs.gtmetrix_urls }}
         run: |
           set -euo pipefail
@@ -256,7 +256,6 @@ jobs:
       # ── Comment on issue ─────────────────────────────────────────────────────
       - name: Comment on issue
         env:
-          GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
           PR_URL:     ${{ steps.create_pr.outputs.pr_url }}
           COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
         run: |
