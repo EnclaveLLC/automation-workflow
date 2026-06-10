@@ -208,13 +208,18 @@ jobs:
             '|:---|:---|:---:|:---:|:---:|',
             ...rows,
           ].join('\n');
+          const abortedUrls = (process.env.ABORTED_URLS_LIST || '').split('\n').filter(Boolean);
+          const abortNotes = abortedUrls.map(u =>
+            `> ⚠️ **Test aborted:** ${u}\n> The test ran for over 5 minutes and was ended automatically. Please test this URL in GTmetrix manually.`
+          ).join('\n\n');
+          const suffix = abortNotes ? '\n\n' + abortNotes : '';
           body = body.replace(
             /(\| GT Metrix Test \| )<img[^>]+>( \|)/,
             `$1<img src="${process.env.BADGE_IN_PROGRESS}" width="120">$2`
           );
           body = body.replace(
             /<!-- gtmetrix-details -->[\s\S]*?<!-- \/gtmetrix-details -->/,
-            `<!-- gtmetrix-details -->\n${table}\n<!-- /gtmetrix-details -->`
+            `<!-- gtmetrix-details -->\n${table}${suffix}\n<!-- /gtmetrix-details -->`
           );
           process.stdout.write(body);
           SCRIPT
@@ -244,7 +249,7 @@ jobs:
             echo "$STATUS_JSON" > /tmp/gtm_status.json
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
               > /tmp/current_body.txt 2>/dev/null || return
-            local NEW_BODY=$(node /tmp/update_gtm_progress.js)
+            local NEW_BODY=$(ABORTED_URLS_LIST="$ABORTED_URLS" node /tmp/update_gtm_progress.js)
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
               -f body="$NEW_BODY" > /dev/null 2>&1 || true
@@ -400,6 +405,7 @@ jobs:
           let output = [
             '---',
             '### GTmetrix Performance Test:',
+            '<!-- linear:table-colwidths:298,130,65,111,95 -->',
             '| URL | Status | Grade | Performance | Structure |',
             '|:---|:---|:---:|:---:|:---:|',
             ...rows,
