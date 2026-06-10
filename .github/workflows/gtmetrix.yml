@@ -50,47 +50,6 @@ jobs:
       actions: read
 
     steps:
-      - name: Initialize GTmetrix status in comment
-        if: inputs.gtmetrix_url != '' && inputs.comment_id != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GTMETRIX_URLS: ${{ inputs.gtmetrix_url }}
-          COMMENT_ID: ${{ inputs.comment_id }}
-          BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
-        run: |
-          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
-            > /tmp/current_body.txt 2>/dev/null || exit 0
-
-          NEW_BODY=$(node -e "
-            const fs = require('fs');
-            let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
-            const urls = process.env.GTMETRIX_URLS.split('\n').filter(Boolean);
-            const badge = process.env.BADGE_IN_PROGRESS;
-            const rows = urls.map(url =>
-              \`| \${url} | <img src=\"\${badge}\" width=\"120\"> | - | - | - |\`
-            );
-            const table = [
-              '---',
-              '### GTmetrix Performance Test:',
-              '<!-- linear:table-colwidths:298,130,65,111,95 -->',
-              '| URL | Status | Grade | Performance | Structure |',
-              '|:---|:---|:---:|:---:|:---:|',
-              ...rows,
-            ].join('\n');
-            body = body.replace(
-              /(\| GT Metrix Test \| )<img[^>]+>( \|)/,
-              \`\$1<img src=\"\${badge}\" width=\"120\">\$2\`
-            );
-            body = body.replace(
-              /<!-- gtmetrix-details -->[\s\S]*?<!-- \/gtmetrix-details -->/,
-              \`<!-- gtmetrix-details -->\n\${table}\n<!-- /gtmetrix-details -->\`
-            );
-            process.stdout.write(body);
-          ")
-          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
-            -X PATCH \
-            -f body="$NEW_BODY" > /dev/null || true
-
       - name: Checkout caller repository
         uses: actions/checkout@v4
         with:

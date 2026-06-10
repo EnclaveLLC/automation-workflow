@@ -100,7 +100,7 @@ jobs:
             let details = '### Post Quality Assurance\n\n';
             for (const url of urls) {
               details += 'Page: ' + url + '\n\n';
-              details += '<!-- linear:table-colwidths:215,154 -->';
+              details += '<!-- linear:table-colwidths:215,154 -->\n';
               details += '| Post QA Items | Status |\n';
               details += '|:---|:---|\n';
               for (const check of checks) {
@@ -248,7 +248,7 @@ jobs:
               : '<img src="' + badgeFailed + '" width="120">';
 
             tablesMd += `Page: ${r.pageUrl}\n\n`;
-            tablesMd += '<!-- linear:table-colwidths:215,154 -->';
+            tablesMd += '<!-- linear:table-colwidths:215,154 -->\n';
             tablesMd += `| Post QA Items | Status |\n`;
             tablesMd += `|:---|:---|\n`;
             tablesMd += `| Image less than 1MB | ${status(imageSizeOk)} |\n`;
