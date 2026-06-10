@@ -152,7 +152,7 @@ jobs:
             waiting:    process.env.BADGE_WAITING,
           };
           const lines = [
-            '## Standard Workflow: ' + title + ' In-Progress',
+            '## <img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Standard Workflow: ' + title + ' In-Progress',
             '',
             '<!-- linear:table-colwidths:215,154 -->',
             '| Step | Status |',
