@@ -301,6 +301,24 @@ jobs:
 
             if [ "$URL_ABORTED" = "true" ]; then
               update_comment "" ""
+              if [ -n "$COMMENT_ID" ]; then
+                gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
+                  > /tmp/current_body.txt 2>/dev/null
+                ABORTED_URL="$URL" NEW_BODY=$(node -e "
+                  const fs = require('fs');
+                  let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
+                  const url = process.env.ABORTED_URL;
+                  const note = '> ⚠️ **Test aborted:** ' + url + '\n> The test ran for over 5 minutes and was ended automatically. Please test this URL in GTmetrix manually.';
+                  body = body.replace(
+                    /(<!-- gtmetrix-details -->[\s\S]*?)(<!-- \/gtmetrix-details -->)/,
+                    (_, content, close) => content.trimEnd() + '\n\n' + note + '\n' + close
+                  );
+                  process.stdout.write(body);
+                ")
+                gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+                  -X PATCH \
+                  -f body="$NEW_BODY" > /dev/null || true
+              fi
               continue
             fi
 
