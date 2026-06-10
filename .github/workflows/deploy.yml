@@ -75,7 +75,69 @@ jobs:
       issue_url: ${{ steps.extract.outputs.issue_url }}
       comment_id: ${{ steps.deploy_comment.outputs.comment_id }}
     steps:
-      - name: Check secrets presence
+      - name: Post initial workflow status comment
+        id: deploy_comment
+        env:
+          PR_BODY: ${{ inputs.pr_body }}
+          GH_TOKEN: ${{ github.token }}
+          BADGE_COMPLETED: ${{ inputs.badge_completed }}
+          BADGE_ABORTED: ${{ inputs.badge_aborted }}
+          BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
+          BADGE_WAITING: ${{ inputs.badge_waiting }}
+        run: |
+          ISSUE_URL=$(echo "$PR_BODY" \
+            | awk 'tolower($0) ~ /^### issue[[:space:]]*$/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH); exit}' \
+            | tr -d '\r')
+          [ -z "$ISSUE_URL" ] && exit 0
+          ISSUE_NUMBER=$(echo "$ISSUE_URL" | grep -oE '[0-9]+$')
+
+          cat > /tmp/initial_comment.js << 'SCRIPT'
+          const title = process.env.PR_TITLE || '';
+          const badges = {
+            completed:  process.env.BADGE_COMPLETED,
+            aborted:    process.env.BADGE_ABORTED,
+            inProgress: process.env.BADGE_IN_PROGRESS,
+            waiting:    process.env.BADGE_WAITING,
+          };
+          const lines = [
+            '## <img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Standard Workflow: ' + title + ' In-Progress',
+            '',
+            '<!-- linear:table-colwidths:215,154 -->',
+            '| Step | Status |',
+            '|:---|:---|',
+            `| Verify Secrets | <img src="${badges.inProgress}" width="120"> |`,
+            `| Deployment | <img src="${badges.waiting}" width="120"> |`,
+            `| Pre Quality Assurance | <img src="${badges.waiting}" width="120"> |`,
+            `| GT Metrix Test | <img src="${badges.waiting}" width="120"> |`,
+            '',
+            '---',
+            '### Deployment Details:',
+            '```',
+            'FTP Deploy: In-Progress',
+            'AWS Deploy: In-Progress',
+            '```',
+            '---',
+            '<!-- qa-details -->',
+            '<!-- /qa-details -->',
+            '<!-- gtmetrix-details -->',
+            '<!-- /gtmetrix-details -->',
+          ];
+          process.stdout.write(lines.join('\n'));
+          SCRIPT
+
+          BODY=$(PR_TITLE="${{ inputs.pr_title }}" node /tmp/initial_comment.js)
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \
+            -X POST \
+            -f body="$BODY" \
+            --jq '.id')
+          echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Verifying Secrets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_ID: ${{ steps.deploy_comment.outputs.comment_id }}
+          BADGE_COMPLETED: ${{ inputs.badge_completed }}
+          BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
         run: |
           echo "FTP_SERVER:            ${{ secrets.FTP_SERVER != '' && '✅ set' || '❌ missing' }}"
           echo "FTP_USERNAME:          ${{ secrets.FTP_USERNAME != '' && '✅ set' || '❌ missing' }}"
@@ -83,7 +145,29 @@ jobs:
           echo "AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID != '' && '✅ set' || '❌ missing' }}"
           echo "AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && '✅ set' || '❌ missing' }}"
           echo "GTMETRIX_API_KEY:      ${{ secrets.GTMETRIX_API_KEY != '' && '✅ set' || '❌ missing' }}"
-          echo "SLACK_BOT_TOKEN:       ${{ secrets.SLACK_BOT_TOKEN != '' && '✅ set' || '❌ missing' }}"
+
+          [ -z "$COMMENT_ID" ] && exit 0
+
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
+            > /tmp/current_body.txt 2>/dev/null || exit 0
+
+          node -e "
+            const fs = require('fs');
+            let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
+            body = body.replace(
+              /(\| Verify Secrets \| )<img[^>]+>( \|)/,
+              \`\$1<img src=\"\${process.env.BADGE_COMPLETED}\" width=\"120\">\$2\`
+            );
+            body = body.replace(
+              /(\| Deployment \| )<img[^>]+>( \|)/,
+              \`\$1<img src=\"\${process.env.BADGE_IN_PROGRESS}\" width=\"120\">\$2\`
+            );
+            process.stdout.write(body);
+          " | gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            --input - > /dev/null || true
+
+      
 
       - name: Fetch PR body if push is from a merged PR
         id: extract
@@ -130,58 +214,6 @@ jobs:
             fi
             echo "-------------------------"
           fi
-
-      - name: Post initial workflow status comment
-        id: deploy_comment
-        if: steps.extract.outputs.issue_url != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BADGE_COMPLETED: ${{ inputs.badge_completed }}
-          BADGE_ABORTED: ${{ inputs.badge_aborted }}
-          BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
-          BADGE_WAITING: ${{ inputs.badge_waiting }}
-        run: |
-          ISSUE_NUMBER=$(echo "${{ steps.extract.outputs.issue_url }}" | grep -oE '[0-9]+$')
-
-          cat > /tmp/initial_comment.js << 'SCRIPT'
-          const title = process.env.PR_TITLE || '';
-          const badges = {
-            completed:  process.env.BADGE_COMPLETED,
-            aborted:    process.env.BADGE_ABORTED,
-            inProgress: process.env.BADGE_IN_PROGRESS,
-            waiting:    process.env.BADGE_WAITING,
-          };
-          const lines = [
-            '## <img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Standard Workflow: ' + title + ' In-Progress',
-            '',
-            '<!-- linear:table-colwidths:215,154 -->',
-            '| Step | Status |',
-            '|:---|:---|',
-            `| Deployment | <img src="${badges.inProgress}" width="120"> |`,
-            `| Pre Quality Assurance | <img src="${badges.waiting}" width="120"> |`,
-            `| GT Metrix Test | <img src="${badges.waiting}" width="120"> |`,
-            '',
-            '---',
-            '### Deployment Details:',
-            '```',
-            'FTP Deploy: In-Progress',
-            'AWS Deploy: In-Progress',
-            '```',
-            '---',
-            '<!-- qa-details -->',
-            '<!-- /qa-details -->',
-            '<!-- gtmetrix-details -->',
-            '<!-- /gtmetrix-details -->',
-          ];
-          process.stdout.write(lines.join('\n'));
-          SCRIPT
-
-          BODY=$(PR_TITLE="${{ inputs.pr_title }}" node /tmp/initial_comment.js)
-          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \
-            -X POST \
-            -f body="$BODY" \
-            --jq '.id')
-          echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------------------
   # Job 2a: Deploy via FTP (runs after PR Info)
