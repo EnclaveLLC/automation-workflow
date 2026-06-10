@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     outputs:
       ref_path:        ${{ steps.parse.outputs.ref_path }}
       duplicate_path:  ${{ steps.parse.outputs.duplicate_path }}
@@ -26,8 +28,6 @@ jobs:
     steps:
       - name: Comment page duplication in progress
         id: progress_comment
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
             -X POST \
@@ -56,6 +56,8 @@ jobs:
     permissions:
       contents: read
       issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout and fetch latest
         uses: actions/checkout@v4
@@ -69,7 +71,6 @@ jobs:
 
       - name: Check if duplicate path already exists
         env:
-          GH_TOKEN:       ${{ github.token }}
           DUPLICATE_PATH: ${{ needs.parse-issue.outputs.duplicate_path }}
           COMMENT_ID:     ${{ needs.parse-issue.outputs.comment_id }}
         run: |
