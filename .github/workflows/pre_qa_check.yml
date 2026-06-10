@@ -218,10 +218,10 @@ jobs:
         run: |
           if [ "$QA_PASSED" = "true" ]; then
             BADGE_URL="$BADGE_COMPLETED"
-            printf 'Pre Quality Assurance: ✅ All checks passed\n%s' "$PASSED_CHECKS" > /tmp/qa_details.txt
+            printf '### Pre Quality Assurance: ✅ All checks passed\n%s' "$PASSED_CHECKS" > /tmp/qa_details.txt
           else
-            BADGE_URL="$BADGE_ABORTED"
-            printf 'Pre Quality Assurance Failed:\n```\n%s```' "$FAILURE_MESSAGE" > /tmp/qa_details.txt
+            BADGE_URL="$BADGE_COMPLETED"
+            printf '### Pre Quality Assurance Failed:\n```\n%s```' "$FAILURE_MESSAGE" > /tmp/qa_details.txt
           fi
 
           CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')

@@ -347,6 +347,8 @@ jobs:
             rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120"> | - | - | - |`);
           }
           let output = [
+            '---',
+            '### GTmetrix Performance Test Results',
             '| URL | Status | Grade | Performance | Structure |',
             '|:---|:---|:---:|:---:|:---:|',
             ...rows,

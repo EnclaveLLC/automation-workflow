@@ -57,8 +57,6 @@ on:
         required: false
       GTMETRIX_API_KEY:
         required: false
-      SLACK_BOT_TOKEN:
-        required: false
 
 jobs:
 
@@ -164,7 +162,7 @@ jobs:
             `| GT Metrix Test | <img src="${badges.waiting}" width="120"> |`,
             '',
             '---',
-            '### Deployment Details',
+            '### Deployment Details:',
             '```',
             'FTP Deploy: In-Progress',
             'AWS Deploy: In-Progress',
