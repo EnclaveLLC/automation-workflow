@@ -296,3 +296,40 @@ jobs:
       badge_waiting: ${{ inputs.badge_waiting }}
     secrets:
       GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}
+
+  # ---------------------------------------------------------------------------
+  # Job 5: Mark workflow completed (runs after GTmetrix)
+  # ---------------------------------------------------------------------------
+  workflow-complete:
+    name: Mark Workflow Completed
+    needs: [fetching-info, gtmetrix]
+    if: |
+      !cancelled() &&
+      needs.fetching-info.outputs.comment_id != ''
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Update comment header to Completed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_ID: ${{ needs.fetching-info.outputs.comment_id }}
+          PR_TITLE: ${{ inputs.pr_title }}
+        run: |
+          CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
+          NEW_BODY=$(echo "$CURRENT" | node -e "
+            const lines = [];
+            const rl = require('readline').createInterface({ input: process.stdin });
+            rl.on('line', l => lines.push(l));
+            rl.on('close', () => {
+              let body = lines.join('\n');
+              body = body.replace(
+                /^(## )(?:<img[^>]+\/>\s*)?Standard Workflow: (.+?) In-Progress$/m,
+                '\$1Standard Workflow: \$2 Completed'
+              );
+              process.stdout.write(body);
+            });
+          ")
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$NEW_BODY"
