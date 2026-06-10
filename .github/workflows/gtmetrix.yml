@@ -200,6 +200,8 @@ jobs:
             return `| ${row.url} | <img src="${badge}" width="120"> | - | - | - |`;
           });
           const table = [
+            '---',
+            '### GTmetrix Performance Test',
             '| URL | Status | Grade | Performance | Structure |',
             '|:---|:---|:---:|:---:|:---:|',
             ...rows,
