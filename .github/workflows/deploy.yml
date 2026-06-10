@@ -110,13 +110,8 @@ jobs:
             `| Pre Quality Assurance | <img src="${badges.waiting}" width="120"> |`,
             `| GT Metrix Test | <img src="${badges.waiting}" width="120"> |`,
             '',
-            '---',
-            '### Deployment Details:',
-            '```',
-            'FTP Deploy: In-Progress',
-            'AWS Deploy: In-Progress',
-            '```',
-            '---',
+            '<!-- deployment-details -->',
+            '<!-- /deployment-details -->',
             '<!-- qa-details -->',
             '<!-- /qa-details -->',
             '<!-- gtmetrix-details -->',
@@ -151,7 +146,7 @@ jobs:
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
             > /tmp/current_body.txt 2>/dev/null || exit 0
 
-          node -e "
+          NEW_BODY=$(node -e "
             const fs = require('fs');
             let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
             body = body.replace(
@@ -162,10 +157,15 @@ jobs:
               /(\| Deployment \| )<img[^>]+>( \|)/,
               \`\$1<img src=\"\${process.env.BADGE_IN_PROGRESS}\" width=\"120\">\$2\`
             );
+            body = body.replace(
+              /<!-- deployment-details -->[\s\S]*?<!-- \/deployment-details -->/,
+              '<!-- deployment-details -->\n---\n### Deployment Details:\n\`\`\`\nFTP Deploy: In-Progress\nAWS Deploy: In-Progress\n\`\`\`\n---\n<!-- /deployment-details -->'
+            );
             process.stdout.write(body);
-          " | gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+          ")
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            --input - > /dev/null || true
+            -f body="$NEW_BODY" > /dev/null || true
 
       
 
