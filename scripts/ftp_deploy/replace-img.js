@@ -44,13 +44,10 @@ files.forEach(file => {
       if (/^https?:\/\//i.test(src)) return match; // external
       if (/\bno-cdn\b/i.test(attrs)) return match; // no-cdn
 
-      // Determine path relative to repo
-      let relativePath;
-      if (src.startsWith("/")) {
-        relativePath = src.replace(/^\/+/, "");
-      } else {
-        relativePath = path.join(htmlFolder, src).replace(/\\/g, "/");
-      }
+      // Determine path relative to repo — treat absolute paths (/img.webp)
+      // the same as relative ones: resolve against the HTML file's folder.
+      const normalizedSrc = src.replace(/^\/+/, "");
+      let relativePath = path.join(htmlFolder, normalizedSrc).replace(/\\/g, "/");
 
       // Force .webp
       relativePath = relativePath.replace(/\.\w+$/i, ".webp");
@@ -76,12 +73,8 @@ files.forEach(file => {
           let [url, size] = entry.trim().split(/\s+/);
           if (/^https?:\/\//i.test(url)) return entry;
 
-          let relativePath;
-          if (url.startsWith("/")) {
-            relativePath = url.replace(/^\/+/, "");
-          } else {
-            relativePath = path.join(htmlFolder, url).replace(/\\/g, "/");
-          }
+          const normalizedUrl = url.replace(/^\/+/, "");
+          let relativePath = path.join(htmlFolder, normalizedUrl).replace(/\\/g, "/");
 
           // Force .webp
           relativePath = relativePath.replace(/\.\w+$/i, ".webp");
