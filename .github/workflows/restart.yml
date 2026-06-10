@@ -16,13 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: read
+    env:
+      GH_TOKEN: ${{ github.token }}
     outputs:
       label_name: ${{ steps.get.outputs.label_name }}
     steps:
       - name: Get trigger label from issue
         id: get
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           LABEL=$(gh issue view "${{ inputs.issue_number }}" --repo "${{ inputs.repository }}" --json labels \

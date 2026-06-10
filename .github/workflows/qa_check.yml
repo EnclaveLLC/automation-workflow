@@ -30,6 +30,8 @@ jobs:
     permissions:
       contents: read
       issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     outputs:
       qa_passed:       ${{ steps.qa.outputs.qa_passed }}
       failure_message: ${{ steps.qa.outputs.failure_message }}
@@ -38,8 +40,6 @@ jobs:
       - name: Comment Pre-Deployment QA in progress
         if: inputs.issue_url != ''
         id: progress_comment
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ISSUE_NUMBER=$(echo "${{ inputs.issue_url }}" | grep -oE '[0-9]+$')
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \

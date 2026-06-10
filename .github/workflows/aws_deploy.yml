@@ -32,6 +32,8 @@ permissions:
 jobs:
   check-changes:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     outputs:
       has_images: ${{ steps.check_images.outputs.has_images }}
 
@@ -79,6 +81,8 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.has_images == 'true'
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
 
     steps:
       # ---------------------------

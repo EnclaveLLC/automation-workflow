@@ -50,6 +50,8 @@ jobs:
     permissions:
       contents: read
       issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     outputs:
       qa_passed:       ${{ steps.qa.outputs.qa_passed }}
       failure_message: ${{ steps.qa.outputs.failure_message }}

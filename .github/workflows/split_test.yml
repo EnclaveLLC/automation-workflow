@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     outputs:
       control_url:  ${{ steps.parse.outputs.control_url }}
       control_path: ${{ steps.parse.outputs.control_path }}
@@ -29,7 +31,7 @@ jobs:
       - name: Comment split test in progress
         id: progress_comment
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
             -X POST \
@@ -42,7 +44,7 @@ jobs:
         with:
           repository: EnclaveLLC/automation-workflow
           path: EnclaveLLC/automation-workflow
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Parse issue body
         id: parse
@@ -58,10 +60,12 @@ jobs:
     permissions:
       contents: read
       issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Update comment — verifying URLs
         env:
-          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN:    ${{ github.token }}
           COMMENT_ID:  ${{ needs.parse-issue.outputs.comment_id }}
           CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
           VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
@@ -76,14 +80,14 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 1
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Pull latest changes
         run: git pull origin ${{ github.event.repository.default_branch }}
 
       - name: Verify paths exist
         env:
-          GH_TOKEN:     ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN:     ${{ github.token }}
           CONTROL_PATH: ${{ needs.parse-issue.outputs.control_path }}
           CONTROL_URL:  ${{ needs.parse-issue.outputs.control_url }}
           VARIATIONS:   ${{ needs.parse-issue.outputs.variations }}
@@ -126,7 +130,7 @@ jobs:
 
       - name: Check split test code not already present
         env:
-          GH_TOKEN:     ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN:     ${{ github.token }}
           CONTROL_PATH: ${{ needs.parse-issue.outputs.control_path }}
           CONTROL_URL:  ${{ needs.parse-issue.outputs.control_url }}
           COMMENT_ID:   ${{ needs.parse-issue.outputs.comment_id }}
@@ -146,7 +150,7 @@ jobs:
 
       - name: Update comment — validation passed
         env:
-          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN:    ${{ github.token }}
           COMMENT_ID:  ${{ needs.parse-issue.outputs.comment_id }}
           CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
           VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
@@ -168,6 +172,7 @@ jobs:
       pull-requests: write
 
     env:
+      GH_TOKEN:     ${{ github.token }}
       CONTROL_PATH: ${{ needs.parse-issue.outputs.control_path }}
       VARIATIONS:   ${{ needs.parse-issue.outputs.variations }}
       COMMENT_ID:   ${{ needs.parse-issue.outputs.comment_id }}
@@ -176,7 +181,7 @@ jobs:
       - name: Comment adding split test code in progress
         id: add_comment
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           ADD_COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
             -X POST \
@@ -189,7 +194,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Pull latest changes
         run: git pull origin ${{ github.event.repository.default_branch }}
@@ -199,7 +204,7 @@ jobs:
         with:
           repository: EnclaveLLC/automation-workflow
           path: EnclaveLLC/automation-workflow
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Add split test code
         run: node EnclaveLLC/automation-workflow/scripts/split_test/add_split_test_code.js
@@ -241,7 +246,7 @@ jobs:
       - name: Create pull request
         id: create_pr
         env:
-          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN:    ${{ github.token }}
           CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
           VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
         run: |
@@ -281,7 +286,7 @@ jobs:
 
       - name: Update comment — split test complete
         env:
-          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN:    ${{ github.token }}
           CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
           VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
           PR_URL:      ${{ steps.create_pr.outputs.pr_url }}
