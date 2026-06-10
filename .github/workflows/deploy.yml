@@ -108,12 +108,15 @@ jobs:
             `| Verify Secrets | <img src="${badges.inProgress}" width="120"> |`,
             `| Deployment | <img src="${badges.waiting}" width="120"> |`,
             `| Pre Quality Assurance | <img src="${badges.waiting}" width="120"> |`,
+            `| Post Quality Assurance | <img src="${badges.waiting}" width="120"> |`,
             `| GT Metrix Test | <img src="${badges.waiting}" width="120"> |`,
             '',
             '<!-- deployment-details -->',
             '<!-- /deployment-details -->',
             '<!-- qa-details -->',
             '<!-- /qa-details -->',
+            '<!-- post-qa-details -->',
+            '<!-- /post-qa-details -->',
             '<!-- gtmetrix-details -->',
             '<!-- /gtmetrix-details -->',
           ];
@@ -252,7 +255,7 @@ jobs:
   # Job 3: QA Validation (runs after deploys)
   # ---------------------------------------------------------------------------
   pre-qa-check:
-    name: QA Validation
+    name: Pre QA Validation
     needs: [fetching-info, deploy-ftp, deploy-aws]
     if: |
       !cancelled() &&
@@ -270,7 +273,7 @@ jobs:
       issues: write
 
   # ---------------------------------------------------------------------------
-  # Job 4: GTmetrix performance check (runs after deploys)
+  # Job 4a: GTmetrix performance check (runs after deploys)
   # ---------------------------------------------------------------------------
   gtmetrix:
     name: GTmetrix Check
@@ -296,6 +299,32 @@ jobs:
       badge_waiting: ${{ inputs.badge_waiting }}
     secrets:
       GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}
+  
+  # ---------------------------------------------------------------------------
+  # Job 4b: Post QA Validation (runs after deploys)
+  # ---------------------------------------------------------------------------
+  post-qa-check:
+    name: Post QA Validation
+    needs: [fetching-info, pre-qa-check]
+    if: |
+      !cancelled() &&
+      needs.fetching-info.outputs.gtmetrix_url != '' &&
+      needs.fetching-info.outputs.issue_url != ''
+    permissions:
+      actions: read
+      contents: write
+      issues: write
+      pull-requests: read
+      id-token: write
+    uses: ./.github/workflows/post_qa_check.yml
+    with:
+      urls: ${{ needs.fetching-info.outputs.gtmetrix_url }}
+      issue_url: ${{ needs.fetching-info.outputs.issue_url }}
+      comment_id: ${{ needs.fetching-info.outputs.comment_id }}
+      badge_completed: ${{ inputs.badge_completed }}
+      badge_aborted: ${{ inputs.badge_aborted }}
+      badge_in_progress: ${{ inputs.badge_in_progress }}
+      badge_waiting: ${{ inputs.badge_waiting }}
 
   # ---------------------------------------------------------------------------
   # Job 5: Mark workflow completed (runs after GTmetrix)

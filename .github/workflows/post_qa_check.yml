@@ -1,0 +1,238 @@
+# -----------------------------------------------------------------------------
+# Workflow: Post-Deployment QA Check (reusable)
+# Checks (via Playwright):
+#   1. All images on each live page are below 1 MB
+# Outputs: qa_passed, failure_message
+# -----------------------------------------------------------------------------
+name: Post-Deployment QA
+
+on:
+  workflow_call:
+    inputs:
+      urls:
+        description: "Newline-separated live URLs to check"
+        required: true
+        type: string
+      issue_url:
+        description: "GitHub issue URL"
+        required: false
+        type: string
+      comment_id:
+        description: "Existing issue comment ID to update"
+        required: false
+        type: string
+      badge_completed:
+        description: "Image URL for the completed status badge"
+        required: false
+        type: string
+      badge_aborted:
+        description: "Image URL for the aborted status badge"
+        required: false
+        type: string
+      badge_in_progress:
+        description: "Image URL for the in-progress status badge"
+        required: false
+        type: string
+      badge_waiting:
+        description: "Image URL for the waiting status badge"
+        required: false
+        type: string
+    outputs:
+      qa_passed:
+        description: "'true' if all checks passed, 'false' otherwise"
+        value: ${{ jobs.post-qa-check.outputs.qa_passed }}
+      failure_message:
+        description: "Summary of which checks failed"
+        value: ${{ jobs.post-qa-check.outputs.failure_message }}
+
+jobs:
+  post-qa-check:
+    name: Post-Deployment QA
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      qa_passed:       ${{ steps.check.outputs.qa_passed }}
+      failure_message: ${{ steps.check.outputs.failure_message }}
+
+    steps:
+      - name: Initialize Post-QA status in comment
+        if: inputs.comment_id != ''
+        env:
+          GH_TOKEN:          ${{ github.token }}
+          COMMENT_ID:        ${{ inputs.comment_id }}
+          BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
+            > /tmp/current_body.txt 2>/dev/null || exit 0
+
+          NEW_BODY=$(node -e "
+            const fs = require('fs');
+            let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
+            body = body.replace(
+              /(\| Post Quality Assurance \| )<img[^>]+>( \|)/,
+              \`\$1<img src=\"\${process.env.BADGE_IN_PROGRESS}\" width=\"120\">\$2\`
+            );
+            process.stdout.write(body);
+          ")
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$NEW_BODY" > /dev/null || true
+
+      - name: Install Playwright
+        working-directory: /tmp
+        run: |
+          npm init -y
+          npm install playwright
+          npx playwright install --with-deps chromium
+
+      - name: Check image sizes via Playwright
+        id: check
+        env:
+          URLS: ${{ inputs.urls }}
+        run: |
+          cat > /tmp/check_images.js << 'SCRIPT'
+          const { chromium } = require('playwright');
+          const fs = require('fs');
+
+          (async () => {
+            const urls = (process.env.URLS || '').split('\n').filter(Boolean);
+            const ONE_MB = 1024 * 1024;
+            const results = [];
+
+            for (const pageUrl of urls) {
+              console.log(`\n=== Checking: ${pageUrl} ===`);
+              const browser = await chromium.launch();
+              const page = await browser.newPage();
+              const promises = [];
+
+              page.on('response', (res) => {
+                const ct = res.headers()['content-type'] || '';
+                if (!ct.startsWith('image/')) return;
+                const imgUrl = res.url();
+                promises.push(
+                  res.body()
+                    .then(buf => ({ url: imgUrl, size: buf.length }))
+                    .catch(() => null)
+                );
+              });
+
+              try {
+                await page.goto(pageUrl, { waitUntil: 'networkidle', timeout: 60000 });
+                // Scroll to trigger lazy-loaded images
+                await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+                await page.waitForTimeout(3000);
+              } catch (e) {
+                console.error(`  Error loading ${pageUrl}: ${e.message}`);
+                await browser.close();
+                results.push({ pageUrl, error: e.message, largeImages: [], totalImages: 0 });
+                continue;
+              }
+
+              const images = (await Promise.all(promises)).filter(Boolean);
+              const largeImages = images
+                .filter(img => img.size >= ONE_MB)
+                .map(img => ({
+                  url: img.url,
+                  size: img.size,
+                  sizeMB: parseFloat((img.size / 1024 / 1024).toFixed(2)),
+                }));
+
+              console.log(`  Total images loaded: ${images.length}`);
+              largeImages.forEach(img => {
+                console.log(`  OVERSIZED: ${img.url} (${img.sizeMB} MB)`);
+              });
+
+              results.push({ pageUrl, largeImages, totalImages: images.length });
+              await browser.close();
+            }
+
+            fs.writeFileSync('/tmp/post_qa_results.json', JSON.stringify(results, null, 2));
+          })().catch(e => {
+            console.error('Fatal:', e.message);
+            process.exit(1);
+          });
+          SCRIPT
+
+          cd /tmp && node check_images.js
+
+          cat > /tmp/parse_results.js << 'PARSE'
+          const fs = require('fs');
+          const results = JSON.parse(fs.readFileSync('/tmp/post_qa_results.json', 'utf8'));
+          const outputFile = process.env.GITHUB_OUTPUT;
+
+          let passed = true;
+          let failures = '';
+          let passedChecks = '';
+
+          for (const r of results) {
+            if (r.error) {
+              passed = false;
+              failures += `Error loading ${r.pageUrl}: ${r.error}\n`;
+            } else if (r.largeImages.length > 0) {
+              passed = false;
+              failures += `URL: ${r.pageUrl}\n`;
+              for (const img of r.largeImages) {
+                failures += `  - ${img.url} (${img.sizeMB} MB)\n`;
+              }
+            } else {
+              passedChecks += `✅ ${r.pageUrl} — ${r.totalImages} image(s) all under 1 MB\n`;
+            }
+          }
+
+          let output = `qa_passed=${passed}\n`;
+          output += passed
+            ? `failure_message=\n`
+            : `failure_message<<EOF\n${failures.trimEnd()}\nEOF\n`;
+          output += `passed_checks<<EOF\n${passedChecks.trimEnd()}\nEOF\n`;
+
+          fs.appendFileSync(outputFile, output);
+          PARSE
+
+          node /tmp/parse_results.js
+
+      - name: Update comment with Post-QA result
+        if: inputs.comment_id != ''
+        env:
+          GH_TOKEN:        ${{ github.token }}
+          COMMENT_ID:      ${{ inputs.comment_id }}
+          QA_PASSED:       ${{ steps.check.outputs.qa_passed }}
+          PASSED_CHECKS:   ${{ steps.check.outputs.passed_checks }}
+          FAILURE_MESSAGE: ${{ steps.check.outputs.failure_message }}
+          BADGE_COMPLETED: ${{ inputs.badge_completed }}
+          BADGE_ABORTED:   ${{ inputs.badge_aborted }}
+        run: |
+          if [ "$QA_PASSED" = "true" ]; then
+            BADGE_URL="$BADGE_COMPLETED"
+            printf '### Post Quality Assurance: ✅ All image checks passed\n%s' \
+              "$PASSED_CHECKS" > /tmp/post_qa_details.txt
+          else
+            BADGE_URL="$BADGE_ABORTED"
+            printf '### Post Quality Assurance: ❌ Image size checks failed\n```\n%s\n```' \
+              "$FAILURE_MESSAGE" > /tmp/post_qa_details.txt
+          fi
+
+          CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
+          echo "$CURRENT" > /tmp/current_body.txt
+
+          cat > /tmp/update_post_qa.js << 'SCRIPT'
+          const fs = require('fs');
+          let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
+          const details = fs.readFileSync('/tmp/post_qa_details.txt', 'utf8').trim();
+
+          body = body.replace(
+            /(\| Post Quality Assurance \| )<img[^>]+>( \|)/,
+            `$1<img src="${process.env.BADGE_URL}" width="120">$2`
+          );
+          body = body.replace(
+            /<!-- post-qa-details -->[\s\S]*?<!-- \/post-qa-details -->/,
+            `<!-- post-qa-details -->\n${details}\n<!-- /post-qa-details -->`
+          );
+          process.stdout.write(body);
+          SCRIPT
+
+          NEW_BODY=$(BADGE_URL="$BADGE_URL" node /tmp/update_post_qa.js)
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$NEW_BODY"
