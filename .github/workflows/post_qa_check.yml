@@ -1,8 +1,11 @@
 # -----------------------------------------------------------------------------
 # Workflow: Post-Deployment QA Check (reusable)
-# Checks (via Playwright):
-#   1. All images on each live page are below 1 MB
-# Outputs: qa_passed, failure_message
+# Checks (via Playwright) per live URL:
+#   1. All images on the page are below 1 MB
+#   2. Robots meta tag is set to noindex, nofollow
+#   3. GTM Container ID is present
+#   4. Meta Pixel is present
+# Outputs: qa_passed, post_qa_details
 # -----------------------------------------------------------------------------
 name: Post-Deployment QA
 
@@ -41,9 +44,9 @@ on:
       qa_passed:
         description: "'true' if all checks passed, 'false' otherwise"
         value: ${{ jobs.post-qa-check.outputs.qa_passed }}
-      failure_message:
-        description: "Summary of which checks failed"
-        value: ${{ jobs.post-qa-check.outputs.failure_message }}
+      post_qa_details:
+        description: "Formatted per-URL QA result tables"
+        value: ${{ jobs.post-qa-check.outputs.post_qa_details }}
 
 jobs:
   post-qa-check:
@@ -56,14 +59,15 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     outputs:
       qa_passed:       ${{ steps.check.outputs.qa_passed }}
-      failure_message: ${{ steps.check.outputs.failure_message }}
+      post_qa_details: ${{ steps.check.outputs.post_qa_details }}
 
     steps:
-      - name: Initialize Post-QA status in comment
+      - name: Post Quality Assurance in progress
         if: inputs.comment_id != ''
         env:
           COMMENT_ID:        ${{ inputs.comment_id }}
           BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
+          URLS:              ${{ inputs.urls }}
         run: |
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
             > /tmp/current_body.txt 2>/dev/null || exit 0
@@ -71,10 +75,36 @@ jobs:
           NEW_BODY=$(node -e "
             const fs = require('fs');
             let body = fs.readFileSync('/tmp/current_body.txt', 'utf8');
+
             body = body.replace(
               /(\| Post Quality Assurance \| )<img[^>]+>( \|)/,
               \`\$1<img src=\"\${process.env.BADGE_IN_PROGRESS}\" width=\"120\">\$2\`
             );
+
+            const urls = (process.env.URLS || '').split('\n').filter(Boolean);
+            const checks = [
+              'Image less than 1MB',
+              'Robots directives set to \`noindex, nofollow\`',
+              'GTM Container ID verified',
+              'Meta Pixel ID verified',
+            ];
+
+            let details = '### Post Quality Assurance In Progress\n\n';
+            for (const url of urls) {
+              details += 'Page: ' + url + '\n\n';
+              details += '| Post QA Items | Status |\n';
+              details += '|:---|:---|\n';
+              for (const check of checks) {
+                details += '| ' + check + ' | In Progress |\n';
+              }
+              details += '\n';
+            }
+
+            body = body.replace(
+              /<!-- post-qa-details -->[\s\S]*?<!-- \/post-qa-details -->/,
+              '<!-- post-qa-details -->\n' + details.trim() + '\n<!-- /post-qa-details -->'
+            );
+
             process.stdout.write(body);
           ")
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
@@ -88,12 +118,12 @@ jobs:
           npm install playwright
           npx playwright install --with-deps chromium
 
-      - name: Check image sizes via Playwright
+      - name: Run Post-QA checks via Playwright
         id: check
         env:
           URLS: ${{ inputs.urls }}
         run: |
-          cat > /tmp/check_images.js << 'SCRIPT'
+          cat > /tmp/check_post_qa.js << 'SCRIPT'
           const { chromium } = require('playwright');
           const fs = require('fs');
 
@@ -111,41 +141,64 @@ jobs:
               page.on('response', (res) => {
                 const ct = res.headers()['content-type'] || '';
                 if (!ct.startsWith('image/')) return;
-                const imgUrl = res.url();
                 promises.push(
                   res.body()
-                    .then(buf => ({ url: imgUrl, size: buf.length }))
+                    .then(buf => ({ url: res.url(), size: buf.length }))
                     .catch(() => null)
                 );
               });
 
               try {
                 await page.goto(pageUrl, { waitUntil: 'networkidle', timeout: 60000 });
-                // Scroll to trigger lazy-loaded images
                 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
                 await page.waitForTimeout(3000);
               } catch (e) {
                 console.error(`  Error loading ${pageUrl}: ${e.message}`);
                 await browser.close();
-                results.push({ pageUrl, error: e.message, largeImages: [], totalImages: 0 });
+                results.push({ pageUrl, error: e.message });
                 continue;
               }
 
+              // Check 1: Images < 1MB
               const images = (await Promise.all(promises)).filter(Boolean);
-              const largeImages = images
-                .filter(img => img.size >= ONE_MB)
-                .map(img => ({
-                  url: img.url,
-                  size: img.size,
-                  sizeMB: parseFloat((img.size / 1024 / 1024).toFixed(2)),
-                }));
+              const largeImages = images.filter(img => img.size >= ONE_MB);
+              const imageSizeOk = largeImages.length === 0;
+              console.log(`  Images: ${images.length} total, ${largeImages.length} oversized`);
+              largeImages.forEach(img =>
+                console.log(`  OVERSIZED: ${img.url} (${(img.size / 1024 / 1024).toFixed(2)} MB)`)
+              );
 
-              console.log(`  Total images loaded: ${images.length}`);
-              largeImages.forEach(img => {
-                console.log(`  OVERSIZED: ${img.url} (${img.sizeMB} MB)`);
+              // Check 2: Robots noindex, nofollow
+              const robotsContent = await page
+                .$eval('meta[name="robots"]', el => el.getAttribute('content'))
+                .catch(() => null);
+              const robotsOk = !!(
+                robotsContent &&
+                robotsContent.toLowerCase().includes('noindex') &&
+                robotsContent.toLowerCase().includes('nofollow')
+              );
+              console.log(`  Robots: ${robotsContent || 'not found'} => ${robotsOk ? 'OK' : 'FAIL'}`);
+
+              // Check 3: GTM Container ID
+              const pageContent = await page.content();
+              const gtmMatch = pageContent.match(/GTM-[A-Z0-9]+/);
+              const gtmOk = !!gtmMatch;
+              console.log(`  GTM: ${gtmMatch ? gtmMatch[0] : 'not found'} => ${gtmOk ? 'OK' : 'FAIL'}`);
+
+              // Check 4: Meta Pixel
+              const pixelOk = pageContent.includes('fbevents.js') || /fbq\(['"]init['"]/.test(pageContent);
+              console.log(`  Meta Pixel: ${pixelOk ? 'found' : 'not found'}`);
+
+              results.push({
+                pageUrl,
+                checks: { imageSizeOk, robotsOk, gtmOk, pixelOk },
+                largeImages: largeImages.map(img => ({
+                  url: img.url,
+                  sizeMB: parseFloat((img.size / 1024 / 1024).toFixed(2)),
+                })),
+                totalImages: images.length,
               });
 
-              results.push({ pageUrl, largeImages, totalImages: images.length });
               await browser.close();
             }
 
@@ -156,65 +209,65 @@ jobs:
           });
           SCRIPT
 
-          cd /tmp && node check_images.js
+          cd /tmp && node check_post_qa.js
 
-          cat > /tmp/parse_results.js << 'PARSE'
+          cat > /tmp/parse_post_qa.js << 'PARSE'
           const fs = require('fs');
           const results = JSON.parse(fs.readFileSync('/tmp/post_qa_results.json', 'utf8'));
           const outputFile = process.env.GITHUB_OUTPUT;
 
-          let passed = true;
-          let failures = '';
-          let passedChecks = '';
+          let allPassed = true;
+          let tablesMd = '';
 
           for (const r of results) {
             if (r.error) {
-              passed = false;
-              failures += `Error loading ${r.pageUrl}: ${r.error}\n`;
-            } else if (r.largeImages.length > 0) {
-              passed = false;
-              failures += `URL: ${r.pageUrl}\n`;
-              for (const img of r.largeImages) {
-                failures += `  - ${img.url} (${img.sizeMB} MB)\n`;
-              }
-            } else {
-              passedChecks += `✅ ${r.pageUrl} — ${r.totalImages} image(s) all under 1 MB\n`;
+              allPassed = false;
+              tablesMd += `Page: ${r.pageUrl}\n\nError loading page: ${r.error}\n\n`;
+              continue;
             }
+
+            const { imageSizeOk, robotsOk, gtmOk, pixelOk } = r.checks;
+            const pagePassed = imageSizeOk && robotsOk && gtmOk && pixelOk;
+            if (!pagePassed) allPassed = false;
+
+            const status = ok => ok ? 'Passed' : 'Failed';
+
+            tablesMd += `Page: ${r.pageUrl}\n\n`;
+            tablesMd += `| Post QA Items | Status |\n`;
+            tablesMd += `|:---|:---|\n`;
+            tablesMd += `| Image less than 1MB | ${status(imageSizeOk)} |\n`;
+            tablesMd += `| Robots directives set to \`noindex, nofollow\` | ${status(robotsOk)} |\n`;
+            tablesMd += `| GTM Container ID verified | ${status(gtmOk)} |\n`;
+            tablesMd += `| Meta Pixel ID verified | ${status(pixelOk)} |\n`;
+            tablesMd += '\n';
           }
 
-          let output = `qa_passed=${passed}\n`;
-          output += passed
-            ? `failure_message=\n`
-            : `failure_message<<EOF\n${failures.trimEnd()}\nEOF\n`;
-          output += `passed_checks<<EOF\n${passedChecks.trimEnd()}\nEOF\n`;
+          const header = `### Post Quality Assurance ${allPassed ? 'Passed:' : 'Failed:'}\n\n`;
+          const fullDetails = (header + tablesMd).trim();
+
+          let output = `qa_passed=${allPassed}\n`;
+          output += `post_qa_details<<EOF\n${fullDetails}\nEOF\n`;
 
           fs.appendFileSync(outputFile, output);
           PARSE
 
-          node /tmp/parse_results.js
+          node /tmp/parse_post_qa.js
 
       - name: Update comment with Post-QA result
         if: inputs.comment_id != ''
         env:
           COMMENT_ID:      ${{ inputs.comment_id }}
           QA_PASSED:       ${{ steps.check.outputs.qa_passed }}
-          PASSED_CHECKS:   ${{ steps.check.outputs.passed_checks }}
-          FAILURE_MESSAGE: ${{ steps.check.outputs.failure_message }}
+          POST_QA_DETAILS: ${{ steps.check.outputs.post_qa_details }}
           BADGE_COMPLETED: ${{ inputs.badge_completed }}
           BADGE_ABORTED:   ${{ inputs.badge_aborted }}
         run: |
-          if [ "$QA_PASSED" = "true" ]; then
-            BADGE_URL="$BADGE_COMPLETED"
-            printf '### Post Quality Assurance: ✅ All image checks passed\n%s' \
-              "$PASSED_CHECKS" > /tmp/post_qa_details.txt
-          else
-            BADGE_URL="$BADGE_ABORTED"
-            printf '### Post Quality Assurance: ❌ Image size checks failed\n```\n%s\n```' \
-              "$FAILURE_MESSAGE" > /tmp/post_qa_details.txt
-          fi
+          BADGE_URL="$BADGE_ABORTED"
+          [ "$QA_PASSED" = "true" ] && BADGE_URL="$BADGE_COMPLETED"
 
           CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
           echo "$CURRENT" > /tmp/current_body.txt
+          printf '%s' "$POST_QA_DETAILS" > /tmp/post_qa_details.txt
 
           cat > /tmp/update_post_qa.js << 'SCRIPT'
           const fs = require('fs');
