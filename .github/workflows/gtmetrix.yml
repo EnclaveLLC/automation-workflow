@@ -157,8 +157,21 @@ jobs:
             waiting:     process.env.BADGE_WAITING,
             aborted:     process.env.BADGE_ABORTED,
           };
+          const completedResults = {};
+          try {
+            const resultsFile = process.env.RESULTS_FILE;
+            if (resultsFile) {
+              for (const r of JSON.parse(fs.readFileSync(resultsFile, 'utf8'))) {
+                completedResults[r.url] = r;
+              }
+            }
+          } catch {}
           const rows = statusData.map(row => {
             const badge = badgeMap[row.status] || badgeMap.waiting;
+            const result = completedResults[row.url];
+            if (row.status === 'completed' && result) {
+              return `| ${row.url} | <img src="${badge}" width="120"> | ${result.grade} | ${result.performance}% | ${result.structure}% |`;
+            }
             return `| ${row.url} | <img src="${badge}" width="120"> | - | - | - |`;
           });
           const table = [
@@ -210,7 +223,7 @@ jobs:
             echo "$STATUS_JSON" > /tmp/gtm_status.json
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
               > /tmp/current_body.txt 2>/dev/null || return
-            local NEW_BODY=$(ABORTED_URLS_LIST="$ABORTED_URLS" node /tmp/update_gtm_progress.js)
+            local NEW_BODY=$(ABORTED_URLS_LIST="$ABORTED_URLS" RESULTS_FILE="$TMPFILE" node /tmp/update_gtm_progress.js)
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
               -f body="$NEW_BODY" > /dev/null 2>&1 || true
@@ -316,12 +329,12 @@ jobs:
                 fs.writeFileSync('$TMPFILE', JSON.stringify(arr, null, 2));
               "
               echo "=== Best for $URL: $(cat /tmp/gtmetrix_best.json) ==="
+              update_comment "" ""
             else
               echo "⚠️  No valid results for $URL — not saved."
               FAILED_URLS="${FAILED_URLS:+$FAILED_URLS$'\n'}$URL"
             fi
 
-            COMPLETED_URLS=$(printf '%s%s\n' "$COMPLETED_URLS" "$URL")
           done <<< "$GTMETRIX_URLS"
 
           JSON_OUTPUT=$(jq -c . "$TMPFILE")
