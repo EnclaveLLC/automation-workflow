@@ -331,6 +331,25 @@ jobs:
           fi
           echo "✅ Control path exists: $CONTROL_PATH"
 
+      - name: Check split test code is present
+        env:
+          CONTROL_PATH: ${{ needs.parse-issue.outputs.control_path }}
+          CONTROL_URL:  ${{ needs.parse-issue.outputs.control_url }}
+          COMMENT_ID:   ${{ needs.parse-issue.outputs.comment_id }}
+        run: |
+          set -euo pipefail
+          CONTROL_PATH="${CONTROL_PATH#/}"
+          INDEX_FILE="$CONTROL_PATH/index.php"
+
+          if ! grep -q "splittester.class.php" "$INDEX_FILE"; then
+            gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+              -X PATCH \
+              -f body="$(printf '### Split Test URL Validation Failed\n\nSplit test code does not exist in:\n\n❌ %s\n\nThere is no split test code to remove.' "$CONTROL_URL")"
+            exit 1
+          fi
+
+          echo "✅ Split test code found in $INDEX_FILE"
+
       - name: Update comment — validation passed
         env:
           COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
