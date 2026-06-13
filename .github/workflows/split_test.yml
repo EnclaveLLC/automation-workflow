@@ -158,7 +158,7 @@ jobs:
           VARIATION_LINES=$(echo "$VARIATIONS" | jq -r '.[] | "✅ \(.name): \(.url)"')
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$(printf '### Split Test URL Validation Passed\n\nControl Page\n✅ %s\n\nVariations\n%s\n\nResult:\n✅ All URLs exist in the repository' "$CONTROL_URL" "$VARIATION_LINES")"
+            -f body='<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> All url'"'"'s verified, Split test code implementation in progress'
 
   # ── Job 3: Add split test code ───────────────────────────────────────────────
   add-split-test-code:
@@ -178,17 +178,6 @@ jobs:
       COMMENT_ID:   ${{ needs.parse-issue.outputs.comment_id }}
 
     steps:
-      - name: Comment adding split test code in progress
-        id: add_comment
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ADD_COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
-            -X POST \
-            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg\" width=\"20\" height=\"20\"/> Split test code implementation in progress" \
-            --jq '.id')
-          echo "comment_id=$ADD_COMMENT_ID" >> "$GITHUB_OUTPUT"
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -290,8 +279,8 @@ jobs:
           CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
           VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
           PR_URL:      ${{ steps.create_pr.outputs.pr_url }}
-          ADD_COMMENT_ID: ${{ steps.add_comment.outputs.comment_id }}
+          COMMENT_ID:  ${{ needs.parse-issue.outputs.comment_id }}
         run: |
-          gh api repos/${{ github.repository }}/issues/comments/${ADD_COMMENT_ID} \
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
             -f body="$(printf '### Summary:\n- Control page verified\n- Variations pages verified\n- Split test code added to control page\n- PR created\n\nThe split test ${{ inputs.type }} is now available in PR to review:\n%s' "$PR_URL")"
