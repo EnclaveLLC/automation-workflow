@@ -112,6 +112,9 @@ jobs:
           const lines = [
             '## <img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Standard Workflow: ' + title + ' In-Progress',
             '',
+            '_This status summary may not reflect the most recent progress._',
+            '_For real-time updates, logs, and step details, visit: [GitHub Actions](' + process.env.RUN_URL + ')_',
+            '',
             '<!-- linear:table-colwidths:215,154 -->',
             '| Step | Status |',
             '|:---|:---|',
@@ -133,7 +136,7 @@ jobs:
           process.stdout.write(lines.join('\n'));
           SCRIPT
 
-          BODY=$(PR_TITLE="${{ inputs.pr_title }}" node /tmp/initial_comment.js)
+          BODY=$(PR_TITLE="${{ inputs.pr_title }}" RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" node /tmp/initial_comment.js)
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \
             -X POST \
             -f body="$BODY" \
