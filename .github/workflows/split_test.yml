@@ -73,7 +73,7 @@ jobs:
           VARIATION_LINES=$(echo "$VARIATIONS" | jq -r '.[] | "- \(.name): \(.url)"')
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$(printf '<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Verifying URLs\n\nControl Page\n- %s\n\nVariations\n%s' "$CONTROL_URL" "$VARIATION_LINES")"
+            -f body="$(printf '<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Verifying URLS"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -158,7 +158,7 @@ jobs:
           VARIATION_LINES=$(echo "$VARIATIONS" | jq -r '.[] | "✅ \(.name): \(.url)"')
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body='<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> All url'"'"'s verified, Split test code implementation in progress'
+            -f body='<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Split test code implementation in progress'
 
   # ── Job 3: Add split test code ───────────────────────────────────────────────
   add-split-test-code:
