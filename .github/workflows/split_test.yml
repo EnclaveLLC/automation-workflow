@@ -70,10 +70,9 @@ jobs:
           CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
           VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
         run: |
-          VARIATION_LINES=$(echo "$VARIATIONS" | jq -r '.[] | "- \(.name): \(.url)"')
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$(printf '<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Verifying URLS"
+            -f body='<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Verifying URLs'
 
       - name: Checkout repository
         uses: actions/checkout@v4
