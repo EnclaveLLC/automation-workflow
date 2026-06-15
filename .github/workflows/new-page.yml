@@ -115,12 +115,8 @@ jobs:
 
       - name: Set branch name
         run: |
-          SLUG=$(echo "${{ github.event.issue.title }}" \
-            | tr '[:upper:]' '[:lower:]' \
-            | sed 's/[^a-z0-9]/-/g' \
-            | sed 's/-\+/-/g' \
-            | sed 's/^-\|-$//g')
-          echo "BRANCH_NAME=${SLUG}-${{ github.run_id }}" >> "$GITHUB_ENV"
+          PAGE_SLUG=$(basename "${PAGE_PATH%/}")
+          echo "BRANCH_NAME=new-${PAGE_SLUG}" >> "$GITHUB_ENV"
 
       - name: Create branch
         run: |
@@ -175,4 +171,4 @@ jobs:
           BRANCH_URL="https://github.com/${{ github.repository }}/tree/${BRANCH_NAME}"
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$(printf '### New Page Created\n\n📁 **Page path:** %s\n\n🌿 **Branch:** %s' "$PAGE_PATH" "$BRANCH_URL")"
+            -f body="$(printf '### New Page Created\n\n📁 **Page path:** %s\n\n🌿 **Branch:** %s\n\n---\n\nThe page branch is ready. Comment `@pr` on this issue to generate a pull request.' "$PAGE_PATH" "$BRANCH_URL")"
