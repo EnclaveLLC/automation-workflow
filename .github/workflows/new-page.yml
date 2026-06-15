@@ -129,13 +129,21 @@ jobs:
           PAGE_SLUG=$(basename "${PAGE_PATH%/}")
           echo "BRANCH_NAME=new-${PAGE_SLUG}" >> "$GITHUB_ENV"
 
-      - name: Create branch
+      - name: Verify branch does not already exist
         run: |
           set -euo pipefail
-          if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
+          if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "refs/heads/${BRANCH_NAME}"; then
+            gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+              -X PATCH \
+              -f body="$(printf '### New Page Creation Failed\n\nBranch already exists on remote:\n\n❌ %s\n\nPlease delete the branch or choose a different page path.' "$BRANCH_NAME")"
             echo "ERROR: Branch '$BRANCH_NAME' already exists on remote."
             exit 1
           fi
+          echo "✅ Branch '$BRANCH_NAME' is available."
+
+      - name: Create branch
+        run: |
+          set -euo pipefail
           git checkout -b "$BRANCH_NAME"
 
       - name: Create page folder and index.html
