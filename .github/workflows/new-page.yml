@@ -9,8 +9,170 @@ on:
         type: number
 
 jobs:
-  hello-world:
+  # ── Job 1: Parse issue body ─────────────────────────────────────────────────
+  parse-issue:
+    name: Parse Issue Body
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      page_url:   ${{ steps.parse.outputs.page_url }}
+      page_path:  ${{ steps.parse.outputs.page_path }}
+      comment_id: ${{ steps.progress_comment.outputs.comment_id }}
+
     steps:
-      - name: Hello World
-        run: echo "Hello, World!"
+      - name: Comment new page creation in progress
+        id: progress_comment
+        run: |
+          COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
+            -X POST \
+            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg\" width=\"20\" height=\"20\"/> New page creation in progress" \
+            --jq '.id')
+          echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Parse issue body
+        id: parse
+        run: |
+          ISSUE_BODY=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }} --jq '.body')
+
+          PAGE_URL=$(echo "$ISSUE_BODY" | grep -oE 'https?://[^ >)\r\n]+' | head -1 | tr -d '\r')
+
+          if [ -z "$PAGE_URL" ]; then
+            gh api repos/${{ github.repository }}/issues/comments/$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments --jq '.[-1].id') \
+              -X PATCH \
+              -f body="$(printf '### New Page Creation Failed\n\nNo URL found in the issue body.\n\nPlease follow the issue format and include a valid page URL.')"
+            echo "ERROR: No URL found in issue body"
+            exit 1
+          fi
+
+          PAGE_PATH=$(echo "$PAGE_URL" | sed 's|https\?://[^/]*/||' | tr -d '\r')
+
+          echo "page_url=$PAGE_URL"   >> "$GITHUB_OUTPUT"
+          echo "page_path=$PAGE_PATH" >> "$GITHUB_OUTPUT"
+          echo "Parsed URL:  $PAGE_URL"
+          echo "Parsed path: $PAGE_PATH"
+
+  # ── Job 2: Check path does not already exist ────────────────────────────────
+  check-path:
+    name: Check Path Availability
+    needs: parse-issue
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN:   ${{ github.token }}
+      PAGE_PATH:  ${{ needs.parse-issue.outputs.page_path }}
+      COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          token: ${{ github.token }}
+
+      - name: Check page does not already exist
+        run: |
+          set -euo pipefail
+          CLEAN_PATH="${PAGE_PATH#/}"
+          if [ -e "$CLEAN_PATH" ]; then
+            gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+              -X PATCH \
+              -f body="$(printf '### New Page Creation Failed\n\nThe following path already exists in the repository:\n\n❌ %s\n\nPlease choose a different path.' "$CLEAN_PATH")"
+            echo "ERROR: '$CLEAN_PATH' already exists."
+            exit 1
+          fi
+          echo "✅ Path '$CLEAN_PATH' is available."
+
+  # ── Job 3: Create new page ──────────────────────────────────────────────────
+  create-page:
+    name: Create New Page
+    needs: [parse-issue, check-path]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    env:
+      GH_TOKEN:   ${{ github.token }}
+      PAGE_PATH:  ${{ needs.parse-issue.outputs.page_path }}
+      PAGE_URL:   ${{ needs.parse-issue.outputs.page_url }}
+      COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Pull latest changes
+        run: git pull origin ${{ github.event.repository.default_branch }}
+
+      - name: Set branch name
+        run: |
+          SLUG=$(echo "${{ github.event.issue.title }}" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed 's/[^a-z0-9]/-/g' \
+            | sed 's/-\+/-/g' \
+            | sed 's/^-\|-$//g')
+          echo "BRANCH_NAME=${SLUG}-${{ github.run_id }}" >> "$GITHUB_ENV"
+
+      - name: Create branch
+        run: |
+          set -euo pipefail
+          if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
+            echo "ERROR: Branch '$BRANCH_NAME' already exists on remote."
+            exit 1
+          fi
+          git checkout -b "$BRANCH_NAME"
+
+      - name: Create page folder and index.html
+        run: |
+          set -euo pipefail
+          PAGE_PATH="${PAGE_PATH#/}"
+          mkdir -p "$PAGE_PATH"
+
+          printf '%s\n' \
+            '<!DOCTYPE html>' \
+            '<html lang="en">' \
+            '<head>' \
+            '  <meta charset="UTF-8" />' \
+            '  <meta name="viewport" content="width=device-width, initial-scale=1.0" />' \
+            '  <meta name="robots" content="noindex, nofollow" />' \
+            '  <title>New Page</title>' \
+            '</head>' \
+            '<body>' \
+            '' \
+            '</body>' \
+            '</html>' \
+            > "$PAGE_PATH/index.html"
+
+          echo "✅ Created $PAGE_PATH/index.html"
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit changes
+        run: |
+          set -euo pipefail
+          git add .
+          git commit -m "${{ github.event.issue.title }}"
+
+      - name: Push branch
+        run: |
+          set -euo pipefail
+          git push -u origin "$BRANCH_NAME"
+
+      - name: Comment branch link on issue
+        run: |
+          BRANCH_URL="https://github.com/${{ github.repository }}/tree/${BRANCH_NAME}"
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$(printf '### New Page Created\n\n📁 **Page path:** %s\n\n🌿 **Branch:** %s' "$PAGE_PATH" "$BRANCH_URL")"
