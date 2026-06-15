@@ -36,8 +36,15 @@ jobs:
         id: parse
         run: |
           ISSUE_BODY=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }} --jq '.body')
+          export ISSUE_BODY
 
-          PAGE_URL=$(echo "$ISSUE_BODY" | grep -oE 'https?://[^ >)\r\n]+' | head -1 | tr -d '\r')
+          # Ignore "Dev Notes" and anything after it; stop at ] to avoid capturing link targets
+          PAGE_URL=$(node -e "
+            const body = process.env.ISSUE_BODY.split(/\nDev Notes/i)[0];
+            const m = body.match(/https?:\/\/[^\]\s>)]+/);
+            if (!m) { process.stderr.write('No URL found\n'); process.exit(1); }
+            process.stdout.write(m[0]);
+          " 2>/dev/null || true)
 
           if [ -z "$PAGE_URL" ]; then
             gh api repos/${{ github.repository }}/issues/comments/$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments --jq '.[-1].id') \
@@ -47,7 +54,11 @@ jobs:
             exit 1
           fi
 
-          PAGE_PATH=$(echo "$PAGE_URL" | sed 's|https\?://[^/]*/||' | tr -d '\r')
+          # Use Node URL API to reliably strip domain → pathname only
+          PAGE_PATH=$(PAGE_URL="$PAGE_URL" node -e "
+            const url = new URL(process.env.PAGE_URL);
+            process.stdout.write(url.pathname.replace(/^\//, ''));
+          ")
 
           echo "page_url=$PAGE_URL"   >> "$GITHUB_OUTPUT"
           echo "page_path=$PAGE_PATH" >> "$GITHUB_OUTPUT"
