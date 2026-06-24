@@ -28,32 +28,32 @@ on:
         description: "Image URL for the completed status badge"
         required: false
         type: string
-        default: "https://uploads.linear.app/4bc00d3f-d924-4928-a0c1-3397413d38b5/8236ca14-4ace-4f27-be74-f1a26ecf2c1c/3c8bbc4d-fc7b-4b53-a00f-63a01090d9a4"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/completed.svg"
       badge_aborted:
         description: "Image URL for the aborted status badge"
         required: false
         type: string
-        default: "https://uploads.linear.app/4bc00d3f-d924-4928-a0c1-3397413d38b5/d5284804-f2a1-444e-9eea-9d21af8aca84/6ef490f7-91d6-4e04-b3d0-5814d930af41"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/aborted.svg"
       badge_in_progress:
         description: "Image URL for the in-progress status badge"
         required: false
         type: string
-        default: "https://uploads.linear.app/4bc00d3f-d924-4928-a0c1-3397413d38b5/da37ce3d-73e1-41bc-8b01-fb9ca9b59310/15d2efec-5d49-48ca-aa3c-e3dfa5766f33"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/in-progress.svg"
       badge_waiting:
         description: "Image URL for the waiting status badge"
         required: false
         type: string
-        default: "https://uploads.linear.app/4bc00d3f-d924-4928-a0c1-3397413d38b5/32ff1d1c-810d-4aac-a265-31545ea812e7/751c6d5a-f43a-4b62-8cc1-617a293e0d1c"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/waiting.svg"
       badge_passed:
         description: "Image URL for the passed status badge"
         required: false
         type: string
-        default: "https://uploads.linear.app/4bc00d3f-d924-4928-a0c1-3397413d38b5/87048c18-a3eb-4395-a1ff-42ce3c6e874e/400d6abc-6ae3-4dc8-88c0-2181c3c6f63d"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/passed.svg"
       badge_failed:
         description: "Image URL for the failed status badge"
         required: false
         type: string
-        default: "https://uploads.linear.app/4bc00d3f-d924-4928-a0c1-3397413d38b5/ff681cf1-6a2d-4a5a-963d-03e23b8e719a/5ac65e21-673d-480c-abc4-c955ab10e8ed"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/failed.svg"
     secrets:
       FTP_SERVER:
         required: false
