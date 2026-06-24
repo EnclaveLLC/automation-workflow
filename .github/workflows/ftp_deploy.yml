@@ -148,6 +148,31 @@ jobs:
           fi
 
       # ---------------------------------------------------------
+      # Delete removed page folders from FTP
+      # ---------------------------------------------------------
+      - name: Delete removed page folders from FTP
+        run: |
+          DELETED=$(git diff --name-only --diff-filter=D \
+            ${{ github.event.pull_request.base.sha || github.event.before }} \
+            ${{ github.event.pull_request.merge_commit_sha || github.sha }} \
+            | grep '^pages/' | cut -d/ -f2 | sort -u)
+
+          if [ -z "$DELETED" ]; then
+            echo "No page folders deleted — skipping FTP deletion."
+            exit 0
+          fi
+
+          echo "Folders to delete from FTP:"
+          echo "$DELETED"
+
+          for FOLDER in $DELETED; do
+            echo "Deleting FTP: pages/$FOLDER"
+            lftp -c "set net:timeout 15; open -u '${{ secrets.FTP_USERNAME }}','${{ secrets.FTP_PASSWORD }}' '${{ secrets.FTP_SERVER }}'; rm -rf pages/$FOLDER; bye" \
+              && echo "✅ Deleted pages/$FOLDER" \
+              || echo "⚠️ Could not delete pages/$FOLDER (may not exist on server)"
+          done
+
+      # ---------------------------------------------------------
       # Replace <img> src in ROOT files
       # ---------------------------------------------------------
       - name: Checkout automation-workflow scripts
@@ -201,6 +226,8 @@ jobs:
           include: |
             index.html
             index.php
+            **/*.html
+            **/*.php
             **/*.css
             **/*.js
           exclude: |
