@@ -42,6 +42,15 @@ on:
       samcart_domain:
         description: "Samcart Domain from Notion"
         value: ${{ jobs.parse.outputs.samcart_domain }}
+      checkout_1_pack:
+        description: "1 Pack Checkout URL from Notion"
+        value: ${{ jobs.parse.outputs.checkout_1_pack }}
+      checkout_3_pack:
+        description: "3 Pack Checkout URL from Notion"
+        value: ${{ jobs.parse.outputs.checkout_3_pack }}
+      checkout_6_pack:
+        description: "6 Pack Checkout URL from Notion"
+        value: ${{ jobs.parse.outputs.checkout_6_pack }}
       buyer_agency:
         description: "Buyer/Agency from Notion"
         value: ${{ jobs.parse.outputs.buyer_agency }}
@@ -75,7 +84,10 @@ jobs:
       product:        ${{ steps.fetch.outputs.product }}
       gtm:            ${{ steps.fetch.outputs.gtm }}
       meta_pixel:     ${{ steps.fetch.outputs.meta_pixel }}
-      samcart_domain: ${{ steps.fetch.outputs.samcart_domain }}
+      samcart_domain:  ${{ steps.fetch.outputs.samcart_domain }}
+      checkout_1_pack: ${{ steps.fetch.outputs.checkout_1_pack }}
+      checkout_3_pack: ${{ steps.fetch.outputs.checkout_3_pack }}
+      checkout_6_pack: ${{ steps.fetch.outputs.checkout_6_pack }}
       buyer_agency:   ${{ steps.fetch.outputs.buyer_agency }}
       marketplace:    ${{ steps.fetch.outputs.marketplace }}
       google_accounts: ${{ steps.fetch.outputs.google_accounts }}
@@ -139,6 +151,9 @@ jobs:
           GTM=$(extract '.properties["GTM"].select.name')
           META_PIXEL=$(extract '.properties["Meta Pixel"].rich_text[0].plain_text')
           SAMCART_DOMAIN=$(extract '.properties["Samcart Domain"].url')
+          CHECKOUT_1_PACK=$(extract '.properties["1 Pack Checkout"].rich_text[0].plain_text')
+          CHECKOUT_3_PACK=$(extract '.properties["3 Pack Checkout"].rich_text[0].plain_text')
+          CHECKOUT_6_PACK=$(extract '.properties["6 Pack Checkout"].rich_text[0].plain_text')
           BUYER_AGENCY=$(extract '.properties["Buyer/Agency"].rich_text[0].plain_text')
           MARKETPLACE=$(extract '.properties["Marketplace"].rich_text[0].plain_text')
           GOOGLE_ACCOUNTS=$(extract '.properties["Google Accounts"].rich_text[0].plain_text')
@@ -153,8 +168,11 @@ jobs:
           echo "  Product:      $PRODUCT"
           echo "  GTM:          $GTM"
           echo "  Meta Pixel:   $META_PIXEL"
-          echo "  Samcart:      $SAMCART_DOMAIN"
-          echo "  Buyer/Agency: $BUYER_AGENCY"
+          echo "  Samcart:        $SAMCART_DOMAIN"
+          echo "  1 Pack Checkout: $CHECKOUT_1_PACK"
+          echo "  3 Pack Checkout: $CHECKOUT_3_PACK"
+          echo "  6 Pack Checkout: $CHECKOUT_6_PACK"
+          echo "  Buyer/Agency:   $BUYER_AGENCY"
           echo "  GDPR:         $GDPR"
 
           {
@@ -165,6 +183,9 @@ jobs:
             echo "gtm=$GTM"
             echo "meta_pixel=$META_PIXEL"
             echo "samcart_domain=$SAMCART_DOMAIN"
+            echo "checkout_1_pack=$CHECKOUT_1_PACK"
+            echo "checkout_3_pack=$CHECKOUT_3_PACK"
+            echo "checkout_6_pack=$CHECKOUT_6_PACK"
             echo "buyer_agency=$BUYER_AGENCY"
             echo "marketplace=$MARKETPLACE"
             echo "google_accounts=$GOOGLE_ACCOUNTS"
