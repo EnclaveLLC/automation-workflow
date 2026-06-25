@@ -35,7 +35,7 @@ jobs:
         run: |
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
             -X POST \
-            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg\" width=\"20\" height=\"20\"/> ${{ inputs.type == 'on' && 'Enabling' || 'Disabling' }} split test in progress" \
+            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-loading.svg\" width=\"20\" height=\"20\"/> ${{ inputs.type == 'on' && 'Enabling' || 'Disabling' }} split test in progress" \
             --jq '.id')
           echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
 
@@ -74,7 +74,7 @@ jobs:
         run: |
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body='<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Verifying URLs'
+            -f body='<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-loading.svg" width="20" height="20"/> Verifying URLs'
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -158,7 +158,7 @@ jobs:
         run: |
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body='<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Split test code implementation in progress'
+            -f body='<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-loading.svg" width="20" height="20"/> Split test code implementation in progress'
 
   # ── Job 3: Add split test code ───────────────────────────────────────────────
   add-split-test-code:
@@ -303,7 +303,7 @@ jobs:
         run: |
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body='<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Verifying URLs'
+            -f body='<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-loading.svg" width="20" height="20"/> Verifying URLs'
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -356,7 +356,7 @@ jobs:
         run: |
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body='<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> All url'"'"'s verified, Removing split test code in progress'
+            -f body='<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-loading.svg" width="20" height="20"/> All url'"'"'s verified, Removing split test code in progress'
 
   # ── Job 5: Remove split test code and create PR ──────────────────────────────
   remove-split-test-code:
