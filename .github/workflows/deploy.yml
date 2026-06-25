@@ -28,32 +28,32 @@ on:
         description: "Image URL for the completed status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-completed.svg?v=27466905719"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-completed.png?v=27466905719"
       badge_aborted:
         description: "Image URL for the aborted status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-aborted.svg?v=27466905719"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-aborted.png?v=27466905719"
       badge_in_progress:
         description: "Image URL for the in-progress status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-in-progress.svg?v=27466905719"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-in-progress.gif?v=27466905719"
       badge_waiting:
         description: "Image URL for the waiting status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-waiting.svg?v=27466905719"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-waiting.gif?v=27466905719"
       badge_passed:
         description: "Image URL for the passed status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-passed.svg?v=27466905719"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-passed.png?v=27466905719"
       badge_failed:
         description: "Image URL for the failed status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-failed.svg?v=27466905719"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-failed.png?v=27466905719"
     secrets:
       FTP_SERVER:
         required: false
@@ -110,7 +110,7 @@ jobs:
             waiting:    process.env.BADGE_WAITING,
           };
           const lines = [
-            '## <img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-loading.svg" width="20" height="20" data-linear-height="20"/> Standard Workflow: ' + title + ' In-Progress',
+            '## <img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/enc-loading.gif" width="20" height="20" data-linear-height="20"/> Standard Workflow: ' + title + ' In-Progress',
             '',
             '_This status summary may not reflect the most recent progress._',
             '_For real-time updates, logs, and step details, visit: [GitHub Actions](' + process.env.RUN_URL + ')_',
