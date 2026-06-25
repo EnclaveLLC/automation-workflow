@@ -243,15 +243,15 @@ jobs:
 
           body = body.replace(
             /(\| Pre Quality Assurance \| )<img[^>]+>( \|)/,
-            `$1<img src="${badgeUrl}" width="120">$2`
+            `$1<img src="${badgeUrl}" width="120" data-linear-height="20">$2`
           );
           body = body.replace(
             /(\| Post Quality Assurance \| )<img[^>]+>( \|)/,
-            `$1<img src="${process.env.BADGE_IN_PROGRESS}" width="120">$2`
+            `$1<img src="${process.env.BADGE_IN_PROGRESS}" width="120" data-linear-height="20">$2`
           );
           body = body.replace(
             /(\| GT Metrix Test \| )<img[^>]+>( \|)/,
-            `$1<img src="${process.env.BADGE_IN_PROGRESS}" width="120">$2`
+            `$1<img src="${process.env.BADGE_IN_PROGRESS}" width="120" data-linear-height="20">$2`
           );
           body = body.replace(
             /<!-- qa-details -->[\s\S]*?<!-- \/qa-details -->/,

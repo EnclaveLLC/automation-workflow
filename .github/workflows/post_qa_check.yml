@@ -86,7 +86,7 @@ jobs:
 
             body = body.replace(
               /(\| Post Quality Assurance \| )<img[^>]+>( \|)/,
-              \`\$1<img src=\"\${process.env.BADGE_IN_PROGRESS}\" width=\"120\">\$2\`
+              \`\$1<img src=\"\${process.env.BADGE_IN_PROGRESS}\" width=\"120\" data-linear-height=\"20\">\$2\`
             );
 
             const urls = (process.env.URLS || '').split('\n').filter(Boolean);
@@ -104,7 +104,7 @@ jobs:
               details += '| Post QA Items | Status |\n';
               details += '|:---|:---|\n';
               for (const check of checks) {
-                details += '| ' + check + ' | <img src=\"' + process.env.BADGE_IN_PROGRESS + '\" width=\"120\"> |\n';
+                details += '| ' + check + ' | <img src=\"' + process.env.BADGE_IN_PROGRESS + '\" width=\"120\" data-linear-height=\"20\"> |\n';
               }
               details += '\n';
             }
@@ -244,8 +244,8 @@ jobs:
             const badgePassed = process.env.BADGE_PASSED;
             const badgeFailed = process.env.BADGE_FAILED;
             const status = ok => ok
-              ? '<img src="' + badgePassed + '" width="120">'
-              : '<img src="' + badgeFailed + '" width="120">';
+              ? '<img src="' + badgePassed + '" width="120" data-linear-height="20">'
+              : '<img src="' + badgeFailed + '" width="120" data-linear-height="20">';
 
             tablesMd += `Page: ${r.pageUrl}\n\n`;
             tablesMd += '<!-- linear:table-colwidths:215,154 -->\n';
@@ -292,7 +292,7 @@ jobs:
 
           body = body.replace(
             /(\| Post Quality Assurance \| )<img[^>]+>( \|)/,
-            `$1<img src="${process.env.BADGE_URL}" width="120">$2`
+            `$1<img src="${process.env.BADGE_URL}" width="120" data-linear-height="20">$2`
           );
           body = body.replace(
             /<!-- post-qa-details -->[\s\S]*?<!-- \/post-qa-details -->/,

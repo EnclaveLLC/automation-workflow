@@ -170,9 +170,9 @@ jobs:
             const badge = badgeMap[row.status] || badgeMap.waiting;
             const result = completedResults[row.url];
             if (row.status === 'completed' && result) {
-              return `| ${row.url} | <img src="${badge}" width="120"> | ${result.grade} | ${result.performance}% | ${result.structure}% |`;
+              return `| ${row.url} | <img src="${badge}" width="120" data-linear-height="20"> | ${result.grade} | ${result.performance}% | ${result.structure}% |`;
             }
-            return `| ${row.url} | <img src="${badge}" width="120"> | - | - | - |`;
+            return `| ${row.url} | <img src="${badge}" width="120" data-linear-height="20"> | - | - | - |`;
           });
           const table = [
             '---',
@@ -189,7 +189,7 @@ jobs:
           const suffix = abortNotes ? '\n\n' + abortNotes : '';
           body = body.replace(
             /(\| GT Metrix Test \| )<img[^>]+>( \|)/,
-            `$1<img src="${process.env.BADGE_IN_PROGRESS}" width="120">$2`
+            `$1<img src="${process.env.BADGE_IN_PROGRESS}" width="120" data-linear-height="20">$2`
           );
           body = body.replace(
             /<!-- gtmetrix-details -->[\s\S]*?<!-- \/gtmetrix-details -->/,
@@ -368,13 +368,13 @@ jobs:
           const abortedUrls = (process.env.ABORTED_URLS || '').split('\n').filter(Boolean);
           const rows = [];
           for (const r of results) {
-            rows.push(`| ${r.url} | <img src="${process.env.BADGE_COMPLETED}" width="120"> | ${r.grade} | ${r.performance}% | ${r.structure}% |`);
+            rows.push(`| ${r.url} | <img src="${process.env.BADGE_COMPLETED}" width="120" data-linear-height="20"> | ${r.grade} | ${r.performance}% | ${r.structure}% |`);
           }
           for (const url of abortedUrls) {
-            rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120"> | - | - | - |`);
+            rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120" data-linear-height="20"> | - | - | - |`);
           }
           for (const url of failedUrls) {
-            rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120"> | - | - | - |`);
+            rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120" data-linear-height="20"> | - | - | - |`);
           }
           let output = [
             '---',
@@ -412,7 +412,7 @@ jobs:
 
           body = body.replace(
             /(\| GT Metrix Test \| )<img[^>]+>( \|)/,
-            `$1<img src="${badgeUrl}" width="120">$2`
+            `$1<img src="${badgeUrl}" width="120" data-linear-height="20">$2`
           );
           body = body.replace(
             /<!-- gtmetrix-details -->[\s\S]*?<!-- \/gtmetrix-details -->/,
