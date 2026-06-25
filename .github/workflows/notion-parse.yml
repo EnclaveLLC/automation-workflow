@@ -76,6 +76,9 @@ jobs:
 
           ROW=$(echo "$BODY" | jq -c '.results[0]')
 
+          echo "🔍 Available properties:"
+          echo "$ROW" | jq -r '.properties | keys[]' | sed 's/^/    /'
+
           extract() {
             echo "$ROW" | jq -r "$1 // empty"
           }
