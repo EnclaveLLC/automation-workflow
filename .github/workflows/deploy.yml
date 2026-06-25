@@ -43,7 +43,7 @@ on:
         description: "Image URL for the waiting status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges_waiting.svg"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-waiting.svg"
       badge_passed:
         description: "Image URL for the passed status badge"
         required: false
@@ -53,7 +53,7 @@ on:
         description: "Image URL for the failed status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges_failed.svg"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-failed.svg"
     secrets:
       FTP_SERVER:
         required: false
@@ -110,7 +110,7 @@ jobs:
             waiting:    process.env.BADGE_WAITING,
           };
           const lines = [
-            '## <img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-loading.gif" width="20" height="20" data-linear-height="20"/> Standard Workflow: ' + title + ' In-Progress',
+            '## Standard Workflow: ' + title + ' In-Progress',
             '',
             '_This status summary may not reflect the most recent progress._',
             '_For real-time updates, logs, and step details, visit: [GitHub Actions](' + process.env.RUN_URL + ')_',
