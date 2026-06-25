@@ -28,7 +28,7 @@ on:
         description: "Image URL for the completed status badge"
         required: false
         type: string
-        default: "https://uploads.linear.app/6a7a73a2-fb87-4abd-9186-bc34988e0a79/9a586b4f-6083-4c98-832a-7aca903c08a5/7ac6b0e2-e043-48da-bede-347a1ccf7931"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-completed.svg"
       badge_aborted:
         description: "Image URL for the aborted status badge"
         required: false
