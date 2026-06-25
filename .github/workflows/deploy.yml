@@ -28,32 +28,32 @@ on:
         description: "Image URL for the completed status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-completed.svg?v=27466905719"
+        default: "https://d3j6ngx7p7lglj.cloudfront.net/automation-workflow/images/badges-completed.svg?v=27466905719"
       badge_aborted:
         description: "Image URL for the aborted status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-aborted.svg?v=27466905719"
+        default: "https://d3j6ngx7p7lglj.cloudfront.net/automation-workflow/images/badges-aborted.svg?v=27466905719"
       badge_in_progress:
         description: "Image URL for the in-progress status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-in-progress.svg?v=27466905719"
+        default: "https://d3j6ngx7p7lglj.cloudfront.net/automation-workflow/images/badges-in-progress.svg?v=27466905719"
       badge_waiting:
         description: "Image URL for the waiting status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-waiting.svg?v=27466905719"
+        default: "https://d3j6ngx7p7lglj.cloudfront.net/automation-workflow/images/badges-waiting.svg?v=27466905719"
       badge_passed:
         description: "Image URL for the passed status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-passed.svg?v=27466905719"
+        default: "https://d3j6ngx7p7lglj.cloudfront.net/automation-workflow/images/badges-passed.svg?v=27466905719"
       badge_failed:
         description: "Image URL for the failed status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-failed.svg?v=27466905719"
+        default: "https://d3j6ngx7p7lglj.cloudfront.net/automation-workflow/images/badges-failed.svg?v=27466905719"
     secrets:
       FTP_SERVER:
         required: false
