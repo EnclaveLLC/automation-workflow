@@ -255,6 +255,7 @@ jobs:
             .split('\n').filter(Boolean).map(u => `- ${u}`).join('\n');
 
           const raw = process.env.NOTION_JSON || '';
+          console.log(`[debug] NOTION_JSON length=${raw.length} prefix=${raw.slice(0,80)}`);
           let notionSection = '';
           if (raw) {
             const n = JSON.parse(raw);

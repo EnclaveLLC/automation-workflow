@@ -139,4 +139,10 @@ jobs:
               buyer_agency, marketplace, google_accounts, taboola_pixel, tiktok_pixel,
               offer_id, gdpr}')
 
+          if [ -z "$NOTION_JSON" ]; then
+            echo "❌ jq failed to build NOTION_JSON — check for invalid arg values above"
+            exit 1
+          fi
+
+          echo "✅ NOTION_JSON built (${#NOTION_JSON} chars)"
           echo "notion_json=$NOTION_JSON" >> "$GITHUB_OUTPUT"
