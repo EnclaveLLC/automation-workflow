@@ -133,11 +133,27 @@ jobs:
             --arg taboola_pixel    "$TABOOLA_PIXEL" \
             --arg tiktok_pixel     "$TIKTOK_PIXEL" \
             --arg offer_id         "$OFFER_ID" \
-            --argjson gdpr         "$GDPR" \
-            '{domain_name, url, type, product, gtm, meta_pixel, samcart_domain,
-              checkout_1_pack, checkout_3_pack, checkout_6_pack, checkout_9_pack,
-              buyer_agency, marketplace, google_accounts, taboola_pixel, tiktok_pixel,
-              offer_id, gdpr}')
+            --argjson gdpr         "${GDPR:-false}" \
+            '{
+              domain_name:     $domain_name,
+              url:             $url,
+              type:            $type,
+              product:         $product,
+              gtm:             $gtm,
+              meta_pixel:      $meta_pixel,
+              samcart_domain:  $samcart_domain,
+              checkout_1_pack: $checkout_1_pack,
+              checkout_3_pack: $checkout_3_pack,
+              checkout_6_pack: $checkout_6_pack,
+              checkout_9_pack: $checkout_9_pack,
+              buyer_agency:    $buyer_agency,
+              marketplace:     $marketplace,
+              google_accounts: $google_accounts,
+              taboola_pixel:   $taboola_pixel,
+              tiktok_pixel:    $tiktok_pixel,
+              offer_id:        $offer_id,
+              gdpr:            $gdpr
+            }')
 
           if [ -z "$NOTION_JSON" ]; then
             echo "❌ jq failed to build NOTION_JSON — check for invalid arg values above"

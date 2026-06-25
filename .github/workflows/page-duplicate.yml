@@ -99,10 +99,22 @@ jobs:
     secrets:
       NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
 
+  # ── Job 2b: Pass Notion output through a regular job so needs context works ──
+  notion-passthrough:
+    name: Pass Notion Output
+    needs: fetch-notion
+    runs-on: ubuntu-latest
+    outputs:
+      notion_json: ${{ needs.fetch-notion.outputs.notion_json }}
+    steps:
+      - run: echo "notion_json passed (${#NOTION_JSON} chars)"
+        env:
+          NOTION_JSON: ${{ needs.fetch-notion.outputs.notion_json }}
+
   # ── Job 3: Duplicate page and create PR ────────────────────────────────────
   page-duplicate:
     name: Initialize Page Duplicate
-    needs: [parse-issue, check-duplicate-path, fetch-notion]
+    needs: [parse-issue, check-duplicate-path, notion-passthrough]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -239,7 +251,7 @@ jobs:
         id: create_pr
         env:
           GTMETRIX_URLS:  ${{ needs.parse-issue.outputs.gtmetrix_urls }}
-          NOTION_JSON:    ${{ needs.fetch-notion.outputs.notion_json }}
+          NOTION_JSON:    ${{ needs.notion-passthrough.outputs.notion_json }}
           REPO:           ${{ github.repository }}
           ISSUE_NUMBER:   ${{ inputs.issue_number }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
