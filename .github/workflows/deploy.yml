@@ -28,32 +28,32 @@ on:
         description: "Image URL for the completed status badge"
         required: false
         type: string
-        default: "https://d3j6ngx7p7lglj.cloudfront.net/automation-workflow/images/badges-completed.svg?v=27466905719"
+        default: "https://uploads.linear.app/6a7a73a2-fb87-4abd-9186-bc34988e0a79/9a586b4f-6083-4c98-832a-7aca903c08a5/7ac6b0e2-e043-48da-bede-347a1ccf7931"
       badge_aborted:
         description: "Image URL for the aborted status badge"
         required: false
         type: string
-        default: "https://d3j6ngx7p7lglj.cloudfront.net/automation-workflow/images/badges-aborted.svg?v=27466905719"
+        default: "https://uploads.linear.app/6a7a73a2-fb87-4abd-9186-bc34988e0a79/34677452-0542-476a-b0a2-47f80392d5c3/62ed3460-4aa7-4f31-b5ba-b8a7bdec677e"
       badge_in_progress:
         description: "Image URL for the in-progress status badge"
         required: false
         type: string
-        default: "https://d3j6ngx7p7lglj.cloudfront.net/automation-workflow/images/badges-in-progress.svg?v=27466905719"
+        default: "https://uploads.linear.app/6a7a73a2-fb87-4abd-9186-bc34988e0a79/5b5b5b5b-5b5b-5b5b-5b5b-5b5b5b5b5b5b/5b5b5b5b-5b5b-5b5b-5b5b-5b5b5b5b5b5b"
       badge_waiting:
         description: "Image URL for the waiting status badge"
         required: false
         type: string
-        default: "https://d3j6ngx7p7lglj.cloudfront.net/automation-workflow/images/badges-waiting.svg?v=27466905719"
+        default: "https://uploads.linear.app/6a7a73a2-fb87-4abd-9186-bc34988e0a79/9b3c52d8-8667-485f-baee-cbf803958152/adfcabaa-dbf3-4e42-9f48-93ebbb96f87b"
       badge_passed:
         description: "Image URL for the passed status badge"
         required: false
         type: string
-        default: "https://d3j6ngx7p7lglj.cloudfront.net/automation-workflow/images/badges-passed.svg?v=27466905719"
+        default: "https://uploads.linear.app/6a7a73a2-fb87-4abd-9186-bc34988e0a79/5f95d859-63da-4a4f-89fb-e9b2a7ba0268/1087425e-49c9-4073-96fe-068f0d8b8bbc"
       badge_failed:
         description: "Image URL for the failed status badge"
         required: false
         type: string
-        default: "https://d3j6ngx7p7lglj.cloudfront.net/automation-workflow/images/badges-failed.svg?v=27466905719"
+        default: "https://uploads.linear.app/6a7a73a2-fb87-4abd-9186-bc34988e0a79/c7e09566-b286-429a-8ea9-6d1712947473/fe033b85-914a-4b63-afdd-fc357e67d9ef"
     secrets:
       FTP_SERVER:
         required: false
