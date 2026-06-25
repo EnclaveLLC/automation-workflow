@@ -31,7 +31,7 @@ jobs:
         run: |
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
             -X POST \
-            -f body="<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-loading.gif" width="20" height="20" data-linear-height="20"/> Page duplication in progress" \
+            -f body="<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-loading.svg" width="20" height="20" data-linear-height="20"/> Page duplication in progress" \
             --jq '.id')
           echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
 
