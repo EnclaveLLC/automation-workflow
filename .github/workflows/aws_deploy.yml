@@ -197,8 +197,8 @@ jobs:
         if: steps.detect.outputs.has_changes == 'true' && steps.detect.outputs.images != ''
         run: |
           BRANCH=${{ github.ref_name }}
-          git config user.name "enc-action[bot]"
-          git config user.email "enc-action[bot]@users.noreply.github.com"
+          git config user.name "badges-action[bot]"
+          git config user.email "badges-action[bot]@users.noreply.github.com"
 
           git add -A
           git commit -m "♻️ Synced WebP with source image changes" || echo "No WebP changes to commit"
@@ -232,8 +232,8 @@ jobs:
         if: steps.detect.outputs.has_changes == 'true' && steps.detect.outputs.images != ''
         run: |
           BRANCH=${{ github.ref_name }}
-          git config user.name "enc-action[bot]"
-          git config user.email "enc-action[bot]@users.noreply.github.com"
+          git config user.name "badges-action[bot]"
+          git config user.email "badges-action[bot]@users.noreply.github.com"
 
           git add -A
           git commit -m "🗑️ Removed original PNG/JPG images after WebP conversion" || echo "No originals to delete"
