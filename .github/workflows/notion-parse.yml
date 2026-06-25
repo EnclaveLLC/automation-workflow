@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Workflow: Notion Parse
 # Filters the Domains → Tech Reference database by the calling repo name
-# (which matches the domain URL) and exposes that row's fields as outputs.
+# (which matches the domain URL) and exposes all fields as a single JSON output.
 # Source: https://app.notion.com/p/konscious/a74913462eaa4c23bbb6cdc985b5000d
 # -----------------------------------------------------------------------------
 name: Notion Parse
@@ -21,80 +21,16 @@ on:
       NOTION_TOKEN:
         required: true
     outputs:
-      domain_name:
-        description: "Domain Name field from Notion"
-        value: ${{ jobs.parse.outputs.domain_name }}
-      url:
-        description: "URL field from Notion"
-        value: ${{ jobs.parse.outputs.url }}
-      type:
-        description: "Type field from Notion"
-        value: ${{ jobs.parse.outputs.type }}
-      product:
-        description: "Product field from Notion"
-        value: ${{ jobs.parse.outputs.product }}
-      gtm:
-        description: "GTM container ID from Notion"
-        value: ${{ jobs.parse.outputs.gtm }}
-      meta_pixel:
-        description: "Meta Pixel ID from Notion"
-        value: ${{ jobs.parse.outputs.meta_pixel }}
-      samcart_domain:
-        description: "Samcart Domain from Notion"
-        value: ${{ jobs.parse.outputs.samcart_domain }}
-      checkout_1_pack:
-        description: "1 Pack Checkout URL from Notion"
-        value: ${{ jobs.parse.outputs.checkout_1_pack }}
-      checkout_3_pack:
-        description: "3 Pack Checkout URL from Notion"
-        value: ${{ jobs.parse.outputs.checkout_3_pack }}
-      checkout_6_pack:
-        description: "6 Pack Checkout URL from Notion"
-        value: ${{ jobs.parse.outputs.checkout_6_pack }}
-      buyer_agency:
-        description: "Buyer/Agency from Notion"
-        value: ${{ jobs.parse.outputs.buyer_agency }}
-      marketplace:
-        description: "Marketplace from Notion"
-        value: ${{ jobs.parse.outputs.marketplace }}
-      google_accounts:
-        description: "Google Accounts from Notion"
-        value: ${{ jobs.parse.outputs.google_accounts }}
-      taboola_pixel:
-        description: "Taboola Pixel from Notion"
-        value: ${{ jobs.parse.outputs.taboola_pixel }}
-      tiktok_pixel:
-        description: "TikTok Pixel from Notion"
-        value: ${{ jobs.parse.outputs.tiktok_pixel }}
-      offer_id:
-        description: "Offer ID from Notion"
-        value: ${{ jobs.parse.outputs.offer_id }}
-      gdpr:
-        description: "GDPR checkbox from Notion"
-        value: ${{ jobs.parse.outputs.gdpr }}
+      notion_json:
+        description: "All Notion fields as a single JSON object"
+        value: ${{ jobs.parse.outputs.notion_json }}
 
 jobs:
   parse:
     name: Parse Notion Database
     runs-on: ubuntu-latest
     outputs:
-      domain_name:    ${{ steps.fetch.outputs.domain_name }}
-      url:            ${{ steps.fetch.outputs.url }}
-      type:           ${{ steps.fetch.outputs.type }}
-      product:        ${{ steps.fetch.outputs.product }}
-      gtm:            ${{ steps.fetch.outputs.gtm }}
-      meta_pixel:     ${{ steps.fetch.outputs.meta_pixel }}
-      samcart_domain:  ${{ steps.fetch.outputs.samcart_domain }}
-      checkout_1_pack: ${{ steps.fetch.outputs.checkout_1_pack }}
-      checkout_3_pack: ${{ steps.fetch.outputs.checkout_3_pack }}
-      checkout_6_pack: ${{ steps.fetch.outputs.checkout_6_pack }}
-      buyer_agency:   ${{ steps.fetch.outputs.buyer_agency }}
-      marketplace:    ${{ steps.fetch.outputs.marketplace }}
-      google_accounts: ${{ steps.fetch.outputs.google_accounts }}
-      taboola_pixel:  ${{ steps.fetch.outputs.taboola_pixel }}
-      tiktok_pixel:   ${{ steps.fetch.outputs.tiktok_pixel }}
-      offer_id:       ${{ steps.fetch.outputs.offer_id }}
-      gdpr:           ${{ steps.fetch.outputs.gdpr }}
+      notion_json: ${{ steps.fetch.outputs.notion_json }}
 
     steps:
       - name: Query Notion database
@@ -154,6 +90,7 @@ jobs:
           CHECKOUT_1_PACK=$(extract '.properties["1 Pack Checkout"].rich_text[0].plain_text')
           CHECKOUT_3_PACK=$(extract '.properties["3 Pack Checkout"].rich_text[0].plain_text')
           CHECKOUT_6_PACK=$(extract '.properties["6 Pack Checkout"].rich_text[0].plain_text')
+          CHECKOUT_9_PACK=$(extract '.properties["9 Pack Checkout"].rich_text[0].plain_text')
           BUYER_AGENCY=$(extract '.properties["Buyer/Agency"].rich_text[0].plain_text')
           MARKETPLACE=$(extract '.properties["Marketplace"].rich_text[0].plain_text')
           GOOGLE_ACCOUNTS=$(extract '.properties["Google Accounts"].rich_text[0].plain_text')
@@ -162,35 +99,41 @@ jobs:
           OFFER_ID=$(extract '.properties["offer_id"].rich_text[0].plain_text')
           GDPR=$(echo "$ROW" | jq -r '.properties["GDPR"].checkbox')
 
-          echo "  Domain:       $DOMAIN_NAME"
-          echo "  URL:          $URL"
-          echo "  Type:         $TYPE"
-          echo "  Product:      $PRODUCT"
-          echo "  GTM:          $GTM"
-          echo "  Meta Pixel:   $META_PIXEL"
-          echo "  Samcart:        $SAMCART_DOMAIN"
+          echo "  Domain:          $DOMAIN_NAME"
+          echo "  URL:             $URL"
+          echo "  Type:            $TYPE"
+          echo "  Product:         $PRODUCT"
+          echo "  GTM:             $GTM"
+          echo "  Meta Pixel:      $META_PIXEL"
+          echo "  Samcart:         $SAMCART_DOMAIN"
           echo "  1 Pack Checkout: $CHECKOUT_1_PACK"
           echo "  3 Pack Checkout: $CHECKOUT_3_PACK"
           echo "  6 Pack Checkout: $CHECKOUT_6_PACK"
-          echo "  Buyer/Agency:   $BUYER_AGENCY"
-          echo "  GDPR:         $GDPR"
+          echo "  Buyer/Agency:    $BUYER_AGENCY"
+          echo "  GDPR:            $GDPR"
 
-          {
-            echo "domain_name=$DOMAIN_NAME"
-            echo "url=$URL"
-            echo "type=$TYPE"
-            echo "product=$PRODUCT"
-            echo "gtm=$GTM"
-            echo "meta_pixel=$META_PIXEL"
-            echo "samcart_domain=$SAMCART_DOMAIN"
-            echo "checkout_1_pack=$CHECKOUT_1_PACK"
-            echo "checkout_3_pack=$CHECKOUT_3_PACK"
-            echo "checkout_6_pack=$CHECKOUT_6_PACK"
-            echo "buyer_agency=$BUYER_AGENCY"
-            echo "marketplace=$MARKETPLACE"
-            echo "google_accounts=$GOOGLE_ACCOUNTS"
-            echo "taboola_pixel=$TABOOLA_PIXEL"
-            echo "tiktok_pixel=$TIKTOK_PIXEL"
-            echo "offer_id=$OFFER_ID"
-            echo "gdpr=$GDPR"
-          } >> "$GITHUB_OUTPUT"
+          NOTION_JSON=$(jq -cn \
+            --arg domain_name      "$DOMAIN_NAME" \
+            --arg url              "$URL" \
+            --arg type             "$TYPE" \
+            --arg product          "$PRODUCT" \
+            --arg gtm              "$GTM" \
+            --arg meta_pixel       "$META_PIXEL" \
+            --arg samcart_domain   "$SAMCART_DOMAIN" \
+            --arg checkout_1_pack  "$CHECKOUT_1_PACK" \
+            --arg checkout_3_pack  "$CHECKOUT_3_PACK" \
+            --arg checkout_6_pack  "$CHECKOUT_6_PACK" \
+            --arg checkout_9_pack  "$CHECKOUT_9_PACK" \
+            --arg buyer_agency     "$BUYER_AGENCY" \
+            --arg marketplace      "$MARKETPLACE" \
+            --arg google_accounts  "$GOOGLE_ACCOUNTS" \
+            --arg taboola_pixel    "$TABOOLA_PIXEL" \
+            --arg tiktok_pixel     "$TIKTOK_PIXEL" \
+            --arg offer_id         "$OFFER_ID" \
+            --argjson gdpr         "$GDPR" \
+            '{domain_name, url, type, product, gtm, meta_pixel, samcart_domain,
+              checkout_1_pack, checkout_3_pack, checkout_6_pack, checkout_9_pack,
+              buyer_agency, marketplace, google_accounts, taboola_pixel, tiktok_pixel,
+              offer_id, gdpr}')
+
+          echo "notion_json=$NOTION_JSON" >> "$GITHUB_OUTPUT"

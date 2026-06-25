@@ -48,6 +48,10 @@ on:
         description: "Image URL for the failed status badge"
         required: false
         type: string
+      notion_json:
+        description: "All Notion fields as a single JSON object"
+        required: false
+        type: string
     outputs:
       qa_passed:
         description: "'true' if all checks passed, 'false' otherwise"
@@ -76,6 +80,7 @@ jobs:
           COMMENT_ID:        ${{ inputs.comment_id }}
           BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
           URLS:              ${{ inputs.urls }}
+          NOTION_JSON:       ${{ inputs.notion_json }}
         run: |
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
             > /tmp/current_body.txt 2>/dev/null || exit 0
@@ -107,6 +112,32 @@ jobs:
                 details += '| ' + check + ' | <img src=\"' + process.env.BADGE_IN_PROGRESS + '\" width=\"120\" data-linear-height=\"20\"> |\n';
               }
               details += '\n';
+            }
+
+            const raw = process.env.NOTION_JSON || '';
+            if (raw) {
+              const n = JSON.parse(raw);
+              const row = (label, val) => val && String(val).trim()
+                ? \`| \${label} | \${String(val).trim()} |\n\`
+                : '';
+
+              let notionSection = '---\n### Domain Reference (Notion)\n\n';
+              notionSection += '<!-- linear:table-colwidths:215,300 -->\n';
+              notionSection += '| Field | Value |\n';
+              notionSection += '|:---|:---|\n';
+              notionSection += row('Domain Name',     n.domain_name);
+              notionSection += row('Product',         n.product);
+              notionSection += row('Type',            n.type);
+              notionSection += row('Buyer / Agency',  n.buyer_agency);
+              notionSection += row('GTM',             n.gtm);
+              notionSection += row('Meta Pixel',      n.meta_pixel);
+              notionSection += row('GDPR',            n.gdpr);
+              notionSection += row('Samcart Domain',  n.samcart_domain);
+              notionSection += row('1 Pack Checkout', n.checkout_1_pack);
+              notionSection += row('3 Pack Checkout', n.checkout_3_pack);
+              notionSection += row('6 Pack Checkout', n.checkout_6_pack);
+
+              details += '\n' + notionSection.trim();
             }
 
             body = body.replace(
@@ -298,6 +329,7 @@ jobs:
             /<!-- post-qa-details -->[\s\S]*?<!-- \/post-qa-details -->/,
             `<!-- post-qa-details -->\n${details}\n<!-- /post-qa-details -->`
           );
+
           process.stdout.write(body);
           SCRIPT
 

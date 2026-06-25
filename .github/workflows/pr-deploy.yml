@@ -340,7 +340,7 @@ jobs:
   # ---------------------------------------------------------------------------
   post-qa-check:
     name: Post QA Validation
-    needs: [fetching-info, pre-qa-check]
+    needs: [fetching-info, parse-notion, pre-qa-check]
     if: |
       !cancelled() &&
       needs.fetching-info.outputs.gtmetrix_url != '' &&
@@ -359,6 +359,7 @@ jobs:
       badge_waiting: ${{ inputs.badge_waiting }}
       badge_passed: ${{ inputs.badge_passed }}
       badge_failed: ${{ inputs.badge_failed }}
+      notion_json: ${{ needs.parse-notion.outputs.notion_json }}
 
   # ---------------------------------------------------------------------------
   # Job 6: Mark workflow completed (runs after GTmetrix)

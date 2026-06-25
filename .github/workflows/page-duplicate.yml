@@ -7,6 +7,9 @@ on:
         description: "Issue number that triggered this workflow"
         required: true
         type: number
+    secrets:
+      NOTION_TOKEN:
+        required: false
 
 jobs:
   # ── Job 1: Parse issue body ─────────────────────────────────────────────────
@@ -49,7 +52,9 @@ jobs:
           export ISSUE_BODY
           node EnclaveLLC/automation-workflow/scripts/page_duplicate/parse-issue.js
 
-  # ── Job 2: Verify duplicate path does not already exist ───────────────────
+  
+
+  # ── Job 3: Verify duplicate path does not already exist ───────────────────
   check-duplicate-path:
     name: Check Duplicate Path
     needs: parse-issue
@@ -84,11 +89,20 @@ jobs:
             exit 1
           fi
           echo "✅ Path '$DUPLICATE_PATH' is available. Proceeding."
+  # ── Job 2: Fetch Notion domain data ─────────────────────────────────────────
+  fetch-notion:
+    name: Fetch Notion Data
+    needs: [parse-issue, check-duplicate-path]
+    uses: ./.github/workflows/notion-parse.yml
+    with:
+      repo_name: ${{ github.event.repository.name }}
+    secrets:
+      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
 
   # ── Job 3: Duplicate page and create PR ────────────────────────────────────
   page-duplicate:
     name: Initialize Page Duplicate
-    needs: [parse-issue, check-duplicate-path]
+    needs: [parse-issue, check-duplicate-path, fetch-notion]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -184,12 +198,14 @@ jobs:
             exit 1
           fi
 
+      
       # ── Apply replacements ───────────────────────────────────────────────────
       - name: Build CTA pairs
         id: cta_pairs
         env:
           SAMCART_LINKS_FILE: constant-files/samcart-links.json
           CTA_LINKS: ${{ needs.parse-issue.outputs.cta_links }}
+          NOTION_JSON: ${{ needs.fetch-notion.outputs.notion_json }}
         run: node EnclaveLLC/automation-workflow/scripts/page_duplicate/build_cta_pairs.js
 
       - name: Apply replacements
