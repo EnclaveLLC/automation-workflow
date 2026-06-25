@@ -110,11 +110,11 @@ jobs:
             waiting:    process.env.BADGE_WAITING,
           };
           const lines = [
-            '## <img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20"/> Standard Workflow: ' + title + ' In-Progress',
+            '## <img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/loading.svg" width="20" height="20" data-linear-height="20"/> Standard Workflow: ' + title + ' In-Progress',
             '',
             '_This status summary may not reflect the most recent progress._',
             '_For real-time updates, logs, and step details, visit: [GitHub Actions](' + process.env.RUN_URL + ')_',
-            '',
+            '<img src="${badges.inProgress}" width="120">',
             '<!-- linear:table-colwidths:215,154 -->',
             '| Step | Status |',
             '|:---|:---|',
