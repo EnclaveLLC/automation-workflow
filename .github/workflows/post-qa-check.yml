@@ -131,11 +131,12 @@ jobs:
               notionSection += row('Buyer / Agency',  n.buyer_agency);
               notionSection += row('GTM',             n.gtm);
               notionSection += row('Meta Pixel',      n.meta_pixel);
-              notionSection += row('GDPR',            n.gdpr);
+              notionSection += row('GDPR',            n.gdpr === true ? 'Yes' : null);
               notionSection += row('Samcart Domain',  n.samcart_domain);
               notionSection += row('1 Pack Checkout', n.checkout_1_pack);
               notionSection += row('3 Pack Checkout', n.checkout_3_pack);
               notionSection += row('6 Pack Checkout', n.checkout_6_pack);
+              notionSection += row('9 Pack Checkout', n.checkout_9_pack);
 
               details += '\n' + notionSection.trim();
             }

@@ -239,26 +239,65 @@ jobs:
         id: create_pr
         env:
           GTMETRIX_URLS: ${{ needs.parse-issue.outputs.gtmetrix_urls }}
+          NOTION_JSON:   ${{ needs.fetch-notion.outputs.notion_json }}
         run: |
           set -euo pipefail
           ISSUE_NUMBER="${{ inputs.issue_number }}"
           REPO="${{ github.repository }}"
           DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
 
-          GTMETRIX_LIST=$(echo "$GTMETRIX_URLS" | sed '/./s/^/- /')
+          node - << 'SCRIPT'
+          const fs   = require('fs');
+          const repo = process.env.REPO;
+          const num  = process.env.ISSUE_NUMBER;
 
-          cat > /tmp/pr_body.md << PREOF
-          ### Summary:
-          - Page duplicated successfully
-          - Dynamic CTA replacements applied
-          - PR created
+          const gtmetrixUrls = (process.env.GTMETRIX_URLS || '')
+            .split('\n').filter(Boolean).map(u => `- ${u}`).join('\n');
 
-          ### GTMetrix Test URLs
-          ${GTMETRIX_LIST}
+          const raw = process.env.NOTION_JSON || '';
+          let notionSection = '';
+          if (raw) {
+            const n = JSON.parse(raw);
+            const row = (label, val) => val && String(val).trim()
+              ? `| ${label} | ${String(val).trim()} |\n` : '';
+            notionSection  = '### Notion Data:\n\n';
+            notionSection += '| Field | Value |\n|:---|:---|\n';
+            notionSection += row('Domain Name',     n.domain_name);
+            notionSection += row('Product',         n.product);
+            notionSection += row('Type',            n.type);
+            notionSection += row('Buyer / Agency',  n.buyer_agency);
+            notionSection += row('GTM',             n.gtm);
+            notionSection += row('Meta Pixel',      n.meta_pixel);
+            notionSection += row('GDPR',            n.gdpr === true ? 'Yes' : null);
+            notionSection += row('Samcart Domain',  n.samcart_domain);
+            notionSection += row('1 Pack Checkout', n.checkout_1_pack);
+            notionSection += row('3 Pack Checkout', n.checkout_3_pack);
+            notionSection += row('6 Pack Checkout', n.checkout_6_pack);
+            notionSection += row('9 Pack Checkout', n.checkout_9_pack);
+            notionSection += row('Marketplace',     n.marketplace);
+            notionSection += row('Google Accounts', n.google_accounts);
+            notionSection += row('Taboola Pixel',   n.taboola_pixel);
+            notionSection += row('TikTok Pixel',    n.tiktok_pixel);
+            notionSection += row('Offer ID',        n.offer_id);
+          }
 
-          ### Issue
-          https://github.com/${REPO}/issues/${ISSUE_NUMBER}
-          PREOF
+          const body = [
+            '### Summary:',
+            '- Page duplicated successfully',
+            '- Dynamic CTA replacements applied',
+            '- PR created',
+            '',
+            notionSection.trim(),
+            '',
+            '### GTMetrix Test URLs',
+            gtmetrixUrls,
+            '',
+            '### Issue',
+            `https://github.com/${repo}/issues/${num}`,
+          ].join('\n');
+
+          fs.writeFileSync('/tmp/pr_body.md', body);
+          SCRIPT
 
           ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title --jq '.title')
 
