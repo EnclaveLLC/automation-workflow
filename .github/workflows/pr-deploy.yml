@@ -91,12 +91,14 @@ jobs:
       - name: Post initial workflow status comment
         id: deploy_comment
         env:
-          PR_BODY: ${{ inputs.pr_body }}
-          GH_TOKEN: ${{ github.token }}
-          BADGE_COMPLETED: ${{ inputs.badge_completed }}
-          BADGE_ABORTED: ${{ inputs.badge_aborted }}
+          PR_BODY:           ${{ inputs.pr_body }}
+          PR_TITLE:          ${{ inputs.pr_title }}
+          RUN_URL:           ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GH_TOKEN:          ${{ github.token }}
+          BADGE_COMPLETED:   ${{ inputs.badge_completed }}
+          BADGE_ABORTED:     ${{ inputs.badge_aborted }}
           BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
-          BADGE_WAITING: ${{ inputs.badge_waiting }}
+          BADGE_WAITING:     ${{ inputs.badge_waiting }}
         run: |
           ISSUE_URL=$(echo "$PR_BODY" \
             | awk 'tolower($0) ~ /^### issue[[:space:]]*$/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH); exit}' \
@@ -139,7 +141,7 @@ jobs:
           process.stdout.write(lines.join('\n'));
           SCRIPT
 
-          BODY=$(PR_TITLE="${{ inputs.pr_title }}" RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" node /tmp/initial_comment.js)
+          BODY=$(node /tmp/initial_comment.js)
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments \
             -X POST \
             -f body="$BODY" \
