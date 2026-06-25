@@ -1,13 +1,18 @@
 # -----------------------------------------------------------------------------
 # Workflow: Notion Parse
-# Queries the fixed Notion database and exposes its pages as JSON.
-# Database ID: 13179191-0c32-81c5-bd02-000bf86f5417
+# Filters the Domains → Tech Reference database by the calling repo name
+# (which matches the domain URL) and exposes that row's fields as outputs.
+# Source: https://app.notion.com/p/konscious/a74913462eaa4c23bbb6cdc985b5000d
 # -----------------------------------------------------------------------------
 name: Notion Parse
 
 on:
   workflow_call:
     inputs:
+      repo_name:
+        description: "Repository name used to filter the Notion database by URL (e.g. senecahealthads.com)"
+        required: true
+        type: string
       comment_id:
         description: "Issue comment ID to update"
         required: false
@@ -16,31 +21,91 @@ on:
       NOTION_TOKEN:
         required: true
     outputs:
-      notion_data:
-        description: "JSON array of pages returned by the Notion database query"
-        value: ${{ jobs.parse.outputs.notion_data }}
+      domain_name:
+        description: "Domain Name field from Notion"
+        value: ${{ jobs.parse.outputs.domain_name }}
+      url:
+        description: "URL field from Notion"
+        value: ${{ jobs.parse.outputs.url }}
+      type:
+        description: "Type field from Notion"
+        value: ${{ jobs.parse.outputs.type }}
+      product:
+        description: "Product field from Notion"
+        value: ${{ jobs.parse.outputs.product }}
+      gtm:
+        description: "GTM container ID from Notion"
+        value: ${{ jobs.parse.outputs.gtm }}
+      meta_pixel:
+        description: "Meta Pixel ID from Notion"
+        value: ${{ jobs.parse.outputs.meta_pixel }}
+      samcart_domain:
+        description: "Samcart Domain from Notion"
+        value: ${{ jobs.parse.outputs.samcart_domain }}
+      buyer_agency:
+        description: "Buyer/Agency from Notion"
+        value: ${{ jobs.parse.outputs.buyer_agency }}
+      marketplace:
+        description: "Marketplace from Notion"
+        value: ${{ jobs.parse.outputs.marketplace }}
+      google_accounts:
+        description: "Google Accounts from Notion"
+        value: ${{ jobs.parse.outputs.google_accounts }}
+      taboola_pixel:
+        description: "Taboola Pixel from Notion"
+        value: ${{ jobs.parse.outputs.taboola_pixel }}
+      tiktok_pixel:
+        description: "TikTok Pixel from Notion"
+        value: ${{ jobs.parse.outputs.tiktok_pixel }}
+      offer_id:
+        description: "Offer ID from Notion"
+        value: ${{ jobs.parse.outputs.offer_id }}
+      gdpr:
+        description: "GDPR checkbox from Notion"
+        value: ${{ jobs.parse.outputs.gdpr }}
 
 jobs:
   parse:
     name: Parse Notion Database
     runs-on: ubuntu-latest
     outputs:
-      notion_data: ${{ steps.fetch.outputs.notion_data }}
+      domain_name:    ${{ steps.fetch.outputs.domain_name }}
+      url:            ${{ steps.fetch.outputs.url }}
+      type:           ${{ steps.fetch.outputs.type }}
+      product:        ${{ steps.fetch.outputs.product }}
+      gtm:            ${{ steps.fetch.outputs.gtm }}
+      meta_pixel:     ${{ steps.fetch.outputs.meta_pixel }}
+      samcart_domain: ${{ steps.fetch.outputs.samcart_domain }}
+      buyer_agency:   ${{ steps.fetch.outputs.buyer_agency }}
+      marketplace:    ${{ steps.fetch.outputs.marketplace }}
+      google_accounts: ${{ steps.fetch.outputs.google_accounts }}
+      taboola_pixel:  ${{ steps.fetch.outputs.taboola_pixel }}
+      tiktok_pixel:   ${{ steps.fetch.outputs.tiktok_pixel }}
+      offer_id:       ${{ steps.fetch.outputs.offer_id }}
+      gdpr:           ${{ steps.fetch.outputs.gdpr }}
 
     steps:
       - name: Query Notion database
         id: fetch
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          REPO_NAME: ${{ inputs.repo_name }}
         run: |
-          DATABASE_ID="13179191-0c32-81c5-bd02-000bf86f5417"
+          DATABASE_ID="a7491346-2eaa-4c23-bbb6-cdc985b5000d"
+
+          PAYLOAD=$(jq -n --arg repo "$REPO_NAME" '{
+            filter: {
+              property: "URL",
+              url: { contains: $repo }
+            }
+          }')
 
           RESPONSE=$(curl -s -w "\n%{http_code}" \
             -X POST \
             -H "Authorization: Bearer $NOTION_TOKEN" \
             -H "Notion-Version: 2022-06-28" \
             -H "Content-Type: application/json" \
-            -d '{}' \
+            -d "$PAYLOAD" \
             "https://api.notion.com/v1/databases/$DATABASE_ID/query")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
@@ -52,12 +117,59 @@ jobs:
             exit 1
           fi
 
-          PAGE_COUNT=$(echo "$BODY" | jq '.results | length')
-          echo "✅ Fetched $PAGE_COUNT pages from Notion database"
+          MATCH_COUNT=$(echo "$BODY" | jq '.results | length')
 
-          DELIMITER="NOTION_DATA_$(openssl rand -hex 8)"
+          if [ "$MATCH_COUNT" -eq 0 ]; then
+            echo "⚠️ No Notion entry found for URL containing: $REPO_NAME"
+            exit 0
+          fi
+
+          echo "✅ Found $MATCH_COUNT match(es) for '$REPO_NAME'"
+
+          ROW=$(echo "$BODY" | jq -c '.results[0]')
+
+          extract() {
+            echo "$ROW" | jq -r "$1 // empty"
+          }
+
+          DOMAIN_NAME=$(extract '.properties["Domain Name"].title[0].plain_text')
+          URL=$(extract '.properties["URL"].url')
+          TYPE=$(extract '.properties["Type"].rich_text[0].plain_text')
+          PRODUCT=$(extract '.properties["Product"].rich_text[0].plain_text')
+          GTM=$(extract '.properties["GTM"].select.name')
+          META_PIXEL=$(extract '.properties["Meta Pixel"].rich_text[0].plain_text')
+          SAMCART_DOMAIN=$(extract '.properties["Samcart Domain"].url')
+          BUYER_AGENCY=$(extract '.properties["Buyer/Agency"].rich_text[0].plain_text')
+          MARKETPLACE=$(extract '.properties["Marketplace"].rich_text[0].plain_text')
+          GOOGLE_ACCOUNTS=$(extract '.properties["Google Accounts"].rich_text[0].plain_text')
+          TABOOLA_PIXEL=$(extract '.properties["Taboola Pixel"].rich_text[0].plain_text')
+          TIKTOK_PIXEL=$(extract '.properties["Tiktok Pixel"].rich_text[0].plain_text')
+          OFFER_ID=$(extract '.properties["offer_id"].rich_text[0].plain_text')
+          GDPR=$(echo "$ROW" | jq -r '.properties["GDPR"].checkbox')
+
+          echo "  Domain:       $DOMAIN_NAME"
+          echo "  URL:          $URL"
+          echo "  Type:         $TYPE"
+          echo "  Product:      $PRODUCT"
+          echo "  GTM:          $GTM"
+          echo "  Meta Pixel:   $META_PIXEL"
+          echo "  Samcart:      $SAMCART_DOMAIN"
+          echo "  Buyer/Agency: $BUYER_AGENCY"
+          echo "  GDPR:         $GDPR"
+
           {
-            echo "notion_data<<$DELIMITER"
-            echo "$BODY" | jq -c '.results'
-            echo "$DELIMITER"
+            echo "domain_name=$DOMAIN_NAME"
+            echo "url=$URL"
+            echo "type=$TYPE"
+            echo "product=$PRODUCT"
+            echo "gtm=$GTM"
+            echo "meta_pixel=$META_PIXEL"
+            echo "samcart_domain=$SAMCART_DOMAIN"
+            echo "buyer_agency=$BUYER_AGENCY"
+            echo "marketplace=$MARKETPLACE"
+            echo "google_accounts=$GOOGLE_ACCOUNTS"
+            echo "taboola_pixel=$TABOOLA_PIXEL"
+            echo "tiktok_pixel=$TIKTOK_PIXEL"
+            echo "offer_id=$OFFER_ID"
+            echo "gdpr=$GDPR"
           } >> "$GITHUB_OUTPUT"

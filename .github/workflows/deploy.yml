@@ -247,6 +247,7 @@ jobs:
     needs: fetching-info
     uses: ./.github/workflows/notion_parse.yml
     with:
+      repo_name: ${{ github.event.repository.name }}
       comment_id: ${{ needs.fetching-info.outputs.comment_id }}
     secrets:
       NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
