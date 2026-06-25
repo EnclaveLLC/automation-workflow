@@ -118,7 +118,7 @@ jobs:
             '<!-- linear:table-colwidths:215,154 -->',
             '| Step | Status |',
             '|:---|:---|',
-            `| Verify Secrets | <img src="${badges.inProgress}" width="120" data-linear-height="20">|`,
+            `| Verify Secrets | <img src="${badges.inProgress}" width="120" data-linear-height="20"> |`,
             `| Deployment | <img src="${badges.waiting}" width="120" data-linear-height="20"> |`,
             `| Pre Quality Assurance | <img src="${badges.waiting}" width="120" data-linear-height="20"> |`,
             `| Post Quality Assurance | <img src="${badges.waiting}" width="120" data-linear-height="20"> |`,
