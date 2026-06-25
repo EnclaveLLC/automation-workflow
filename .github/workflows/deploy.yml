@@ -38,7 +38,7 @@ on:
         description: "Image URL for the in-progress status badge"
         required: false
         type: string
-        default: "https://uploads.linear.app/6a7a73a2-fb87-4abd-9186-bc34988e0a79/5b5b5b5b-5b5b-5b5b-5b5b-5b5b5b5b5b5b/5b5b5b5b-5b5b-5b5b-5b5b-5b5b5b5b5b5b"
+        default: "https://uploads.linear.app/6a7a73a2-fb87-4abd-9186-bc34988e0a79/06f17266-7bb4-4ca3-a7d5-3f6153d9c3b5/4567c9f6-47df-4632-9b39-3fecda38081f"
       badge_waiting:
         description: "Image URL for the waiting status badge"
         required: false
