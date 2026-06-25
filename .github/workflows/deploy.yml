@@ -28,32 +28,32 @@ on:
         description: "Image URL for the completed status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/completed.svg"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/completed.svg?v=27466905719"
       badge_aborted:
         description: "Image URL for the aborted status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/aborted.svg"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/aborted.svg?v=27466905719"
       badge_in_progress:
         description: "Image URL for the in-progress status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/in-progress.svg"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/in-progress.svg?v=27466905719"
       badge_waiting:
         description: "Image URL for the waiting status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/waiting.svg"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/waiting.svg?v=27466905719"
       badge_passed:
         description: "Image URL for the passed status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/passed.svg"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/passed.svg?v=27466905719"
       badge_failed:
         description: "Image URL for the failed status badge"
         required: false
         type: string
-        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/failed.svg"
+        default: "https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/failed.svg?v=27466905719"
     secrets:
       FTP_SERVER:
         required: false
