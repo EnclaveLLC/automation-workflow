@@ -1,6 +1,6 @@
 # -----------------------------------------------------------------------------
-# Workflow: Deploy (Reusable)
-# Steps:
+# Workflow: PR Deploy (Reusable)
+# Triggered on merged PRs. Full pipeline:
 #   1.  Fetch PR Info + post initial status comment
 #   2.  Parse Notion database (after PR Info)
 #   3a. FTP deploy     ─┐ parallel (after Notion parse)
@@ -8,7 +8,7 @@
 #   4.  Pre QA check       (after deploys — marks Deployment row completed)
 #   5.  GTmetrix check     (after Pre QA)
 # -----------------------------------------------------------------------------
-name: Deploy
+name: PR Deploy
 
 on:
   workflow_call:

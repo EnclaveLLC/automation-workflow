@@ -1,0 +1,50 @@
+# -----------------------------------------------------------------------------
+# Workflow: Push Deploy (Reusable)
+# Triggered on direct pushes. Lean pipeline:
+#   1a. FTP deploy  ─┐ parallel
+#   1b. AWS deploy  ─┘
+# -----------------------------------------------------------------------------
+name: Push Deploy
+
+on:
+  workflow_call:
+    secrets:
+      FTP_SERVER:
+        required: false
+      FTP_USERNAME:
+        required: false
+      FTP_PASSWORD:
+        required: false
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Job 1a: Deploy via FTP
+  # ---------------------------------------------------------------------------
+  deploy-ftp:
+    name: FTP Deploy
+    uses: ./.github/workflows/ftp_deploy.yml
+    permissions:
+      contents: write
+      issues: write
+    secrets:
+      FTP_SERVER: ${{ secrets.FTP_SERVER }}
+      FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+
+  # ---------------------------------------------------------------------------
+  # Job 1b: Deploy to AWS (runs in parallel with deploy-ftp)
+  # ---------------------------------------------------------------------------
+  deploy-aws:
+    name: AWS Deploy
+    uses: ./.github/workflows/aws_deploy.yml
+    permissions:
+      contents: write
+      issues: write
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
