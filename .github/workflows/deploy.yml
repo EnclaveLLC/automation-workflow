@@ -2,10 +2,11 @@
 # Workflow: Deploy (Reusable)
 # Steps:
 #   1.  Fetch PR Info + post initial status comment
-#   2a. FTP deploy     ─┐ parallel (after PR Info)
-#   2b. AWS deploy     ─┘  each updates its own comment row on finish/skip
-#   3.  Pre QA check       (after deploys — marks Deployment row completed)
-#   4.  GTmetrix check     (after Pre QA)
+#   2.  Parse Notion database (after PR Info)
+#   3a. FTP deploy     ─┐ parallel (after Notion parse)
+#   3b. AWS deploy     ─┘  each updates its own comment row on finish/skip
+#   4.  Pre QA check       (after deploys — marks Deployment row completed)
+#   5.  GTmetrix check     (after Pre QA)
 # -----------------------------------------------------------------------------
 name: Deploy
 
@@ -66,6 +67,8 @@ on:
       AWS_SECRET_ACCESS_KEY:
         required: false
       GTMETRIX_API_KEY:
+        required: false
+      NOTION_TOKEN:
         required: false
 
 jobs:
@@ -228,15 +231,32 @@ jobs:
             else
               echo "No issue URL found in PR body."
             fi
+
+            NOTION_URL=$(echo "$PR_BODY" \
+              | awk 'tolower($0) ~ /^### notion[[:space:]]*$/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH); exit}' \
+              | tr -d '\r')
+
             echo "-------------------------"
           fi
+ 
+  # ---------------------------------------------------------------------------
+  # Job 2: Parse Notion Database (runs after PR Info, before deploys)
+  # ---------------------------------------------------------------------------
+  parse-notion:
+    name: Parse Notion
+    needs: fetching-info
+    uses: ./.github/workflows/notion_parse.yml
+    with:
+      comment_id: ${{ needs.fetching-info.outputs.comment_id }}
+    secrets:
+      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # Job 2a: Deploy via FTP (runs after PR Info)
+  # Job 3a: Deploy via FTP (runs after Notion parse)
   # ---------------------------------------------------------------------------
   deploy-ftp:
     name: FTP Deploy
-    needs: fetching-info
+    needs: [fetching-info, parse-notion]
     uses: ./.github/workflows/ftp_deploy.yml
     permissions:
       contents: write
@@ -249,11 +269,11 @@ jobs:
       FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
 
   # ---------------------------------------------------------------------------
-  # Job 2b: Deploy to AWS (runs in parallel with deploy-ftp)
+  # Job 3b: Deploy to AWS (runs in parallel with deploy-ftp)
   # ---------------------------------------------------------------------------
   deploy-aws:
     name: AWS Deploy
-    needs: fetching-info
+    needs: [fetching-info, parse-notion]
     uses: ./.github/workflows/aws_deploy.yml
     permissions:
       contents: write
@@ -265,11 +285,11 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   # ---------------------------------------------------------------------------
-  # Job 3: QA Validation (runs after deploys)
+  # Job 4: QA Validation (runs after deploys)
   # ---------------------------------------------------------------------------
   pre-qa-check:
     name: Pre QA Validation
-    needs: [fetching-info, deploy-ftp, deploy-aws]
+    needs: [fetching-info, parse-notion, deploy-ftp, deploy-aws]
     if: |
       !cancelled() &&
       needs.fetching-info.outputs.issue_url != ''
@@ -287,7 +307,7 @@ jobs:
       issues: write
 
   # ---------------------------------------------------------------------------
-  # Job 4a: GTmetrix performance check (runs after deploys)
+  # Job 5a: GTmetrix performance check (runs after pre-QA)
   # ---------------------------------------------------------------------------
   gtmetrix:
     name: GTmetrix Check
@@ -315,7 +335,7 @@ jobs:
       GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}
   
   # ---------------------------------------------------------------------------
-  # Job 4b: Post QA Validation (runs after deploys)
+  # Job 5b: Post QA Validation (runs after pre-QA)
   # ---------------------------------------------------------------------------
   post-qa-check:
     name: Post QA Validation
@@ -340,7 +360,7 @@ jobs:
       badge_failed: ${{ inputs.badge_failed }}
 
   # ---------------------------------------------------------------------------
-  # Job 5: Mark workflow completed (runs after GTmetrix)
+  # Job 6: Mark workflow completed (runs after GTmetrix)
   # ---------------------------------------------------------------------------
   workflow-complete:
     name: Mark Workflow Completed
