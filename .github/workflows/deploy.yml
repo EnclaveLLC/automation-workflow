@@ -114,7 +114,7 @@ jobs:
             '',
             '_This status summary may not reflect the most recent progress._',
             '_For real-time updates, logs, and step details, visit: [GitHub Actions](' + process.env.RUN_URL + ')_',
-            '<img style="display:none" src="${badges.inProgress}" width="120" data-linear-height="20">',
+            '',
             '<!-- linear:table-colwidths:215,154 -->',
             '| Step | Status |',
             '|:---|:---|',
