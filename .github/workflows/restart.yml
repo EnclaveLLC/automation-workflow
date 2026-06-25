@@ -43,7 +43,7 @@ jobs:
   dispatch:
     name: Restart Workflow
     needs: get-label
-    uses: ./.github/workflows/standard_workflow.yml
+    uses: ./.github/workflows/standard-workflow.yml
     with:
       label_name: ${{ needs.get-label.outputs.label_name }}
       issue_number: ${{ inputs.issue_number }}

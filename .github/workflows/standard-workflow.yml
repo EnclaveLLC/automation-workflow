@@ -22,7 +22,7 @@ jobs:
     page-duplicate:
         name: Page Duplicate
         if: inputs.label_name == 'Page Duplicate'
-        uses: ./.github/workflows/page_duplicate.yml
+        uses: ./.github/workflows/page-duplicate.yml
         with:
             issue_number: ${{ inputs.issue_number }}
         secrets: inherit
@@ -44,7 +44,7 @@ jobs:
 
     split-test-on:
         if: inputs.label_name == 'Split Test On'
-        uses: ./.github/workflows/split_test.yml
+        uses: ./.github/workflows/split-test.yml
         with:
             issue_number: ${{ inputs.issue_number }}
             type: "on"
@@ -56,7 +56,7 @@ jobs:
 
     split-test-off:
         if: inputs.label_name == 'Split Test Off'
-        uses: ./.github/workflows/split_test.yml
+        uses: ./.github/workflows/split-test.yml
         with:
             issue_number: ${{ inputs.issue_number }}
             type: "off"

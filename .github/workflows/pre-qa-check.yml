@@ -84,7 +84,7 @@ jobs:
       - name: Run Pre-Deployment QA
         id: qa
         run: |
-          # Pull latest so AFTER includes any bot commits (e.g. WebP conversion from aws_deploy)
+          # Pull latest so AFTER includes any bot commits (e.g. WebP conversion from aws-deploy)
           git pull origin ${{ github.ref_name }} --no-rebase --quiet
 
           BEFORE="${{ github.event.pull_request.base.sha || github.event.before }}"

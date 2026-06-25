@@ -27,7 +27,7 @@ jobs:
   # ---------------------------------------------------------------------------
   deploy-ftp:
     name: FTP Deploy
-    uses: ./.github/workflows/ftp_deploy.yml
+    uses: ./.github/workflows/ftp-deploy.yml
     permissions:
       contents: write
       issues: write
@@ -41,7 +41,7 @@ jobs:
   # ---------------------------------------------------------------------------
   deploy-aws:
     name: AWS Deploy
-    uses: ./.github/workflows/aws_deploy.yml
+    uses: ./.github/workflows/aws-deploy.yml
     permissions:
       contents: write
       issues: write
