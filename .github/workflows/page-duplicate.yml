@@ -66,6 +66,8 @@ jobs:
       issues: write
     env:
       GH_TOKEN: ${{ github.token }}
+    outputs:
+      comment_updated: ${{ steps.check_path.outputs.comment_updated }}
     steps:
       - name: Checkout and fetch latest
         uses: actions/checkout@v4
@@ -78,6 +80,7 @@ jobs:
         run: git pull origin ${{ github.event.repository.default_branch }}
 
       - name: Check if duplicate path already exists
+        id: check_path
         env:
           DUPLICATE_PATH: ${{ needs.parse-issue.outputs.duplicate_path }}
           COMMENT_ID:     ${{ needs.parse-issue.outputs.comment_id }}
@@ -87,6 +90,7 @@ jobs:
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
               -f body="$(printf '### Page Duplication Failed\n\nThe following path already exists in the repository:\n\n❌ %s\n\nPlease choose a different path.' "$DUPLICATE_PATH")"
+            echo "comment_updated=true" >> "$GITHUB_OUTPUT"
             echo "Error: '$DUPLICATE_PATH' already exists."
             exit 1
           fi
@@ -338,3 +342,26 @@ jobs:
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
             -f body="$(cat /tmp/issue_comment.md)"
+
+  # ── Job: Update comment on any failure ─────────────────────────────────────
+  handle-failure:
+    name: Handle Failure
+    needs: [parse-issue, check-duplicate-path, fetch-notion, page-duplicate]
+    runs-on: ubuntu-latest
+    if: failure() && needs.check-duplicate-path.outputs.comment_updated != 'true'
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Update comment with failure message
+        env:
+          COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
+        run: |
+          if [ -z "$COMMENT_ID" ]; then
+            echo "No comment ID available, skipping"
+            exit 0
+          fi
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$(printf '### Page Duplication Failed\n\nAn error occurred during page duplication. Please check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.')"
