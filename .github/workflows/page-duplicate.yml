@@ -53,13 +53,6 @@ jobs:
           export ISSUE_BODY
           node EnclaveLLC/automation-workflow/scripts/page_duplicate/parse-issue.js
 
-          LINEAR_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
-            --jq '[.[] | select(.user.login | test("linear"; "i")) | .body | match("[A-Z]+-[0-9]+").string] | first // ""' \
-            2>/dev/null || echo "")
-          if [ -n "$LINEAR_ID" ]; then
-            echo "linear_id=$LINEAR_ID" >> "$GITHUB_OUTPUT"
-            echo "linear_id: $LINEAR_ID"
-          fi
 
   
 
@@ -292,6 +285,7 @@ jobs:
             notionSection += row('Offer ID',        n.offer_id);
           }
 
+          const linearId = process.env.LINEAR_ID || '';
           const body = [
             '### Summary:',
             '- Page duplicated successfully',
@@ -305,13 +299,14 @@ jobs:
             '',
             '### Issue',
             `https://github.com/${repo}/issues/${num}`,
+            ...(linearId ? ['', `Resolves ${linearId}`] : []),
           ].join('\n');
 
           fs.writeFileSync('/tmp/pr_body.md', body);
           SCRIPT
 
           ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title --jq '.title')
-          [ -n "$LINEAR_ID" ] && PR_TITLE="$LINEAR_ID $ISSUE_TITLE" || PR_TITLE="$ISSUE_TITLE"
+          PR_TITLE="$ISSUE_TITLE"
 
           PR_URL=$(gh pr create \
             --base  "$DEFAULT_BRANCH" \

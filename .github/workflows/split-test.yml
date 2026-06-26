@@ -272,8 +272,10 @@ jobs:
           https://github.com/${REPO}/issues/${ISSUE_NUMBER}
           PREOF
 
+          [ -n "$LINEAR_ID" ] && printf '\nResolves %s' "$LINEAR_ID" >> /tmp/pr_body.md
+
           ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title --jq '.title')
-          [ -n "$LINEAR_ID" ] && PR_TITLE="$LINEAR_ID $ISSUE_TITLE" || PR_TITLE="$ISSUE_TITLE"
+          PR_TITLE="$ISSUE_TITLE"
 
           PR_URL=$(gh pr create \
             --base  "$DEFAULT_BRANCH" \
@@ -463,8 +465,10 @@ jobs:
           https://github.com/${REPO}/issues/${ISSUE_NUMBER}
           PREOF
 
+          [ -n "$LINEAR_ID" ] && printf '\nResolves %s' "$LINEAR_ID" >> /tmp/pr_body.md
+
           ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title --jq '.title')
-          [ -n "$LINEAR_ID" ] && PR_TITLE="$LINEAR_ID $ISSUE_TITLE" || PR_TITLE="$ISSUE_TITLE"
+          PR_TITLE="$ISSUE_TITLE"
 
           PR_URL=$(gh pr create \
             --base  "$DEFAULT_BRANCH" \
