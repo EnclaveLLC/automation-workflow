@@ -73,6 +73,8 @@ jobs:
       issues: write
     env:
       GH_TOKEN: ${{ github.token }}
+    outputs:
+      comment_updated: ${{ steps.verify_paths.outputs.comment_updated || steps.check_no_split.outputs.comment_updated }}
     steps:
       - name: Update comment — verifying URLs
         env:
@@ -96,6 +98,7 @@ jobs:
         run: git pull origin ${{ github.event.repository.default_branch }}
 
       - name: Verify paths exist
+        id: verify_paths
         env:
           GH_TOKEN:     ${{ github.token }}
           CONTROL_PATH: ${{ needs.parse-issue.outputs.control_path }}
@@ -133,12 +136,14 @@ jobs:
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
               -f body="$(printf '### Split Test Validation Failed\n\nThe following issue(s) were found:\n\n'"$MISSING")"
+            echo "comment_updated=true" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
           echo "✅ All paths verified."
 
       - name: Check split test code not already present
+        id: check_no_split
         env:
           GH_TOKEN:     ${{ github.token }}
           CONTROL_PATH: ${{ needs.parse-issue.outputs.control_path }}
@@ -153,6 +158,7 @@ jobs:
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
               -f body="$(printf '### Split Test URL Validation Failed\n\nSplit test code already exists in:\n\n❌ %s\n\nRemove the existing split test code before enabling a new one.' "$CONTROL_URL")"
+            echo "comment_updated=true" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
@@ -309,6 +315,8 @@ jobs:
       issues: write
     env:
       GH_TOKEN: ${{ github.token }}
+    outputs:
+      comment_updated: ${{ steps.verify_control.outputs.comment_updated || steps.check_has_split.outputs.comment_updated }}
     steps:
       - name: Update comment — verifying control URL
         env:
@@ -329,6 +337,7 @@ jobs:
         run: git pull origin ${{ github.event.repository.default_branch }}
 
       - name: Verify control path exists
+        id: verify_control
         env:
           CONTROL_PATH: ${{ needs.parse-issue.outputs.control_path }}
           CONTROL_URL:  ${{ needs.parse-issue.outputs.control_url }}
@@ -340,11 +349,13 @@ jobs:
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
               -f body="$(printf '### Split Test Validation Failed\n\nThe following path does not exist:\n\n❌ %s' "$CONTROL_URL")"
+            echo "comment_updated=true" >> "$GITHUB_OUTPUT"
             exit 1
           fi
           echo "✅ Control path exists: $CONTROL_PATH"
 
       - name: Check split test code is present
+        id: check_has_split
         env:
           CONTROL_PATH: ${{ needs.parse-issue.outputs.control_path }}
           CONTROL_URL:  ${{ needs.parse-issue.outputs.control_url }}
@@ -358,6 +369,7 @@ jobs:
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
               -f body="$(printf '### Split Test URL Validation Failed\n\nSplit test code does not exist in:\n\n❌ %s\n\nThere is no split test code to remove.' "$CONTROL_URL")"
+            echo "comment_updated=true" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
@@ -486,3 +498,29 @@ jobs:
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
             -f body="$(printf '### Summary:\n- Control page verified\n- Split test code removed from control page\n- PR created\n\nThe split test off is now available in PR to review:\n%s' "$PR_URL")"
+
+  # ── Job: Update comment on any failure ─────────────────────────────────────
+  handle-failure:
+    name: Handle Failure
+    needs: [parse-issue, st-on-check-paths, add-split-test-code, st-off-check-paths, remove-split-test-code]
+    runs-on: ubuntu-latest
+    if: >-
+      failure() &&
+      needs.st-on-check-paths.outputs.comment_updated != 'true' &&
+      needs.st-off-check-paths.outputs.comment_updated != 'true'
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Update comment with failure message
+        env:
+          COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
+        run: |
+          if [ -z "$COMMENT_ID" ]; then
+            echo "No comment ID available, skipping"
+            exit 0
+          fi
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$(printf '### Split Test Failed\n\nAn error occurred. Please check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.')"

@@ -18,9 +18,10 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     outputs:
-      page_url:   ${{ steps.parse.outputs.page_url }}
-      page_path:  ${{ steps.parse.outputs.page_path }}
-      comment_id: ${{ steps.progress_comment.outputs.comment_id }}
+      page_url:        ${{ steps.parse.outputs.page_url }}
+      page_path:       ${{ steps.parse.outputs.page_path }}
+      comment_id:      ${{ steps.progress_comment.outputs.comment_id }}
+      comment_updated: ${{ steps.parse.outputs.comment_updated }}
 
     steps:
       - name: Comment new page creation in progress
@@ -50,6 +51,7 @@ jobs:
             gh api repos/${{ github.repository }}/issues/comments/$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments --jq '.[-1].id') \
               -X PATCH \
               -f body="$(printf '### New Page Creation Failed\n\nNo URL found in the issue body.\n\nPlease follow the issue format and include a valid page URL.')"
+            echo "comment_updated=true" >> "$GITHUB_OUTPUT"
             echo "ERROR: No URL found in issue body"
             exit 1
           fi
@@ -77,6 +79,8 @@ jobs:
       GH_TOKEN:   ${{ github.token }}
       PAGE_PATH:  ${{ needs.parse-issue.outputs.page_path }}
       COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
+    outputs:
+      comment_updated: ${{ steps.check_exists.outputs.comment_updated }}
 
     steps:
       - name: Checkout repository
@@ -87,6 +91,7 @@ jobs:
           token: ${{ github.token }}
 
       - name: Check page does not already exist
+        id: check_exists
         run: |
           set -euo pipefail
           CLEAN_PATH="${PAGE_PATH#/}"
@@ -94,6 +99,7 @@ jobs:
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
               -f body="$(printf '### New Page Creation Failed\n\nThe following path already exists in the repository:\n\n❌ %s\n\nPlease choose a different path.' "$CLEAN_PATH")"
+            echo "comment_updated=true" >> "$GITHUB_OUTPUT"
             echo "ERROR: '$CLEAN_PATH' already exists."
             exit 1
           fi
@@ -112,6 +118,8 @@ jobs:
       PAGE_PATH:  ${{ needs.parse-issue.outputs.page_path }}
       PAGE_URL:   ${{ needs.parse-issue.outputs.page_url }}
       COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
+    outputs:
+      comment_updated: ${{ steps.verify_branch.outputs.comment_updated }}
 
     steps:
       - name: Checkout repository
@@ -130,12 +138,14 @@ jobs:
           echo "BRANCH_NAME=new-${PAGE_SLUG}" >> "$GITHUB_ENV"
 
       - name: Verify branch does not already exist
+        id: verify_branch
         run: |
           set -euo pipefail
           if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "refs/heads/${BRANCH_NAME}"; then
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
               -f body="$(printf '### New Page Creation Failed\n\nBranch already exists on remote:\n\n❌ %s\n\nPlease delete the branch or choose a different page path.' "$BRANCH_NAME")"
+            echo "comment_updated=true" >> "$GITHUB_OUTPUT"
             echo "ERROR: Branch '$BRANCH_NAME' already exists on remote."
             exit 1
           fi
@@ -191,3 +201,30 @@ jobs:
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
             -f body="$(printf '### New Page Created\n\n\n **Page path:** %s\n\n **Branch:** %s\n\n---\n\nThe page branch is ready. Comment `@pr` on this issue to generate a pull request.' "$PAGE_PATH" "$BRANCH_URL")"
+
+  # ── Job: Update comment on any failure ─────────────────────────────────────
+  handle-failure:
+    name: Handle Failure
+    needs: [parse-issue, check-path, create-page]
+    runs-on: ubuntu-latest
+    if: >-
+      failure() &&
+      needs.parse-issue.outputs.comment_updated != 'true' &&
+      needs.check-path.outputs.comment_updated != 'true' &&
+      needs.create-page.outputs.comment_updated != 'true'
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Update comment with failure message
+        env:
+          COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
+        run: |
+          if [ -z "$COMMENT_ID" ]; then
+            echo "No comment ID available, skipping"
+            exit 0
+          fi
+          gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
+            -X PATCH \
+            -f body="$(printf '### New Page Creation Failed\n\nAn error occurred. Please check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.')"
