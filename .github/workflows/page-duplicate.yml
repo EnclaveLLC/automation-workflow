@@ -261,7 +261,7 @@ jobs:
             const n = JSON.parse(raw);
             const row = (label, val) => val && String(val).trim()
               ? `| ${label} | ${String(val).trim()} |\n` : '';
-            notionSection  = '### Notion Data:\n\n';
+            notionSection  = '### Notion Page Data:\n\n';
             notionSection += '| Field | Value |\n|:---|:---|\n';
             notionSection += row('Domain Name',     n.domain_name);
             notionSection += row('Product',         n.product);
