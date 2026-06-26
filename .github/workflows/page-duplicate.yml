@@ -53,6 +53,14 @@ jobs:
           export ISSUE_BODY
           node EnclaveLLC/automation-workflow/scripts/page_duplicate/parse-issue.js
 
+          LINEAR_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
+            --jq '[.[] | select(.user.login | test("linear"; "i")) | .body | match("[A-Z]+-[0-9]+").string] | first // ""' \
+            2>/dev/null || echo "")
+          if [ -n "$LINEAR_ID" ]; then
+            echo "linear_id=$LINEAR_ID" >> "$GITHUB_OUTPUT"
+            echo "linear_id: $LINEAR_ID"
+          fi
+
 
   
 
