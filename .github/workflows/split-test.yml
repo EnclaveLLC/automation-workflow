@@ -26,6 +26,7 @@ jobs:
       control_path: ${{ steps.parse.outputs.control_path }}
       variations:   ${{ steps.parse.outputs.variations }}
       comment_id:   ${{ steps.progress_comment.outputs.comment_id }}
+      linear_id:    ${{ steps.parse.outputs.linear_id }}
 
     steps:
       - name: Comment split test in progress
@@ -52,6 +53,14 @@ jobs:
           ISSUE_BODY=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }} --jq '.body')
           export ISSUE_BODY
           node EnclaveLLC/automation-workflow/scripts/split_test/parse_issue.js
+
+          LINEAR_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
+            --jq '[.[] | select(.user.login | test("linear"; "i")) | .body | match("[A-Z]+-[0-9]+").string] | first // ""' \
+            2>/dev/null || echo "")
+          if [ -n "$LINEAR_ID" ]; then
+            echo "linear_id=$LINEAR_ID" >> "$GITHUB_OUTPUT"
+            echo "linear_id: $LINEAR_ID"
+          fi
 
   # ── Job 2: Verify control and variation paths exist ─────────────────────────
   st-on-check-paths:
@@ -238,6 +247,7 @@ jobs:
           GH_TOKEN:    ${{ github.token }}
           CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
           VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
+          LINEAR_ID:   ${{ needs.parse-issue.outputs.linear_id }}
         run: |
           set -euo pipefail
           ISSUE_NUMBER="${{ inputs.issue_number }}"
@@ -263,11 +273,12 @@ jobs:
           PREOF
 
           ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title --jq '.title')
+          [ -n "$LINEAR_ID" ] && PR_TITLE="$LINEAR_ID $ISSUE_TITLE" || PR_TITLE="$ISSUE_TITLE"
 
           PR_URL=$(gh pr create \
             --base  "$DEFAULT_BRANCH" \
             --head  "$BRANCH_NAME" \
-            --title "$ISSUE_TITLE" \
+            --title "$PR_TITLE" \
             --body-file /tmp/pr_body.md)
 
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
@@ -432,6 +443,7 @@ jobs:
         id: create_pr
         env:
           CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
+          LINEAR_ID:   ${{ needs.parse-issue.outputs.linear_id }}
         run: |
           set -euo pipefail
           ISSUE_NUMBER="${{ inputs.issue_number }}"
@@ -452,11 +464,12 @@ jobs:
           PREOF
 
           ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title --jq '.title')
+          [ -n "$LINEAR_ID" ] && PR_TITLE="$LINEAR_ID $ISSUE_TITLE" || PR_TITLE="$ISSUE_TITLE"
 
           PR_URL=$(gh pr create \
             --base  "$DEFAULT_BRANCH" \
             --head  "$BRANCH_NAME" \
-            --title "$ISSUE_TITLE" \
+            --title "$PR_TITLE" \
             --body-file /tmp/pr_body.md)
 
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
