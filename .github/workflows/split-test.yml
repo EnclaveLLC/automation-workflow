@@ -11,6 +11,9 @@ on:
         description: "Split test action ('on' or 'off')"
         required: true
         type: string
+    secrets:
+      NOTION_TOKEN:
+        required: false
 
 jobs:
   # ── Job 1: Parse issue body ─────────────────────────────────────────────────
@@ -175,11 +178,21 @@ jobs:
             -X PATCH \
             -f body='<img src="https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-loading.svg" width="20" height="20" data-linear-height="20"/> Split test code implementation in progress'
 
+  # ── Job: Fetch Notion domain data ────────────────────────────────────────────
+  fetch-notion:
+    name: Fetch Notion Data
+    needs: [parse-issue]
+    uses: ./.github/workflows/notion-parse.yml
+    with:
+      repo_name: ${{ github.event.repository.name }}
+    secrets:
+      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+
   # ── Job 3: Add split test code ───────────────────────────────────────────────
   add-split-test-code:
     if: inputs.type == 'on' && needs.st-on-check-paths.result == 'success'
     name: Add Split Test Code
-    needs: [parse-issue, st-on-check-paths]
+    needs: [parse-issue, st-on-check-paths, fetch-notion]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -250,35 +263,79 @@ jobs:
       - name: Create pull request
         id: create_pr
         env:
-          GH_TOKEN:    ${{ github.token }}
-          CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
-          VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
-          LINEAR_ID:   ${{ needs.parse-issue.outputs.linear_id }}
+          GH_TOKEN:       ${{ github.token }}
+          CONTROL_URL:    ${{ needs.parse-issue.outputs.control_url }}
+          VARIATIONS:     ${{ needs.parse-issue.outputs.variations }}
+          LINEAR_ID:      ${{ needs.parse-issue.outputs.linear_id }}
+          NOTION_JSON:    ${{ needs.fetch-notion.outputs.notion_json }}
+          REPO:           ${{ github.repository }}
+          ISSUE_NUMBER:   ${{ inputs.issue_number }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          ISSUE_NUMBER="${{ inputs.issue_number }}"
-          REPO="${{ github.repository }}"
-          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
 
-          VARIATION_LIST=$(echo "$VARIATIONS" | jq -r '.[] | "- \(.name): \(.url)"')
-          VARIATION_URLS=$(echo "$VARIATIONS" | jq -r '.[] | .url')
+          node - << 'SCRIPT'
+          const fs   = require('fs');
+          const repo = process.env.REPO;
+          const num  = process.env.ISSUE_NUMBER;
 
-          cat > /tmp/pr_body.md << PREOF
-          ### Summary:
-          - Control page verified
-          - Variations pages verified
-          - Split test code added to control page
-          - PR created
+          const controlUrl = process.env.CONTROL_URL || '';
+          const variationsRaw = process.env.VARIATIONS || '';
+          let variationUrls = '';
+          try {
+            const vars = JSON.parse(variationsRaw);
+            variationUrls = vars.map(v => v.url).join('\n');
+          } catch (e) {}
 
-          ### GTMetrix Test URLs
-          ${CONTROL_URL}
-          ${VARIATION_URLS}
+          const raw = process.env.NOTION_JSON || '';
+          console.log(`[debug] NOTION_JSON length=${raw.length} prefix=${raw.slice(0,80)}`);
+          let notionSection = '';
+          if (raw) {
+            const n = JSON.parse(raw);
+            const row = (label, val) => val && String(val).trim()
+              ? `| ${label} | ${String(val).trim()} |\n` : '';
+            notionSection  = '### Notion Page Data:\n\n';
+            notionSection += '| Field | Value |\n|:---|:---|\n';
+            notionSection += row('Domain Name',     n.domain_name);
+            notionSection += row('Product',         n.product);
+            notionSection += row('Type',            n.type);
+            notionSection += row('Buyer / Agency',  n.buyer_agency);
+            notionSection += row('GTM',             n.gtm);
+            notionSection += row('Meta Pixel',      n.meta_pixel);
+            notionSection += row('GDPR',            n.gdpr === true ? 'Yes' : null);
+            notionSection += row('Samcart Domain',  n.samcart_domain);
+            notionSection += row('1 Pack Checkout', n.checkout_1_pack);
+            notionSection += row('3 Pack Checkout', n.checkout_3_pack);
+            notionSection += row('6 Pack Checkout', n.checkout_6_pack);
+            notionSection += row('9 Pack Checkout', n.checkout_9_pack);
+            notionSection += row('Marketplace',     n.marketplace);
+            notionSection += row('Google Accounts', n.google_accounts);
+            notionSection += row('Taboola Pixel',   n.taboola_pixel);
+            notionSection += row('TikTok Pixel',    n.tiktok_pixel);
+            notionSection += row('Offer ID',        n.offer_id);
+          }
 
-          ### Issue
-          https://github.com/${REPO}/issues/${ISSUE_NUMBER}
-          PREOF
+          const linearId = process.env.LINEAR_ID || '';
+          const body = [
+            '### Summary:',
+            '- Control page verified',
+            '- Variations pages verified',
+            '- Split test code added to control page',
+            '- PR created',
+            '',
+            notionSection.trim(),
+            '',
+            '### GTMetrix Test URLs',
+            controlUrl,
+            variationUrls,
+            '',
+            '### Issue',
+            `https://github.com/${repo}/issues/${num}`,
+            ...(linearId ? ['', `Resolves ${linearId}`] : []),
+          ].join('\n');
 
-          [ -n "$LINEAR_ID" ] && printf '\nResolves %s' "$LINEAR_ID" >> /tmp/pr_body.md
+          fs.writeFileSync('/tmp/pr_body.md', body);
+          SCRIPT
 
           ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title --jq '.title')
           PR_TITLE="$ISSUE_TITLE"
@@ -387,7 +444,7 @@ jobs:
   remove-split-test-code:
     if: inputs.type == 'off' && needs.st-off-check-paths.result == 'success'
     name: Remove Split Test Code
-    needs: [parse-issue, st-off-check-paths]
+    needs: [parse-issue, st-off-check-paths, fetch-notion]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -456,28 +513,70 @@ jobs:
       - name: Create pull request
         id: create_pr
         env:
-          CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
-          LINEAR_ID:   ${{ needs.parse-issue.outputs.linear_id }}
+          GH_TOKEN:       ${{ github.token }}
+          CONTROL_URL:    ${{ needs.parse-issue.outputs.control_url }}
+          LINEAR_ID:      ${{ needs.parse-issue.outputs.linear_id }}
+          NOTION_JSON:    ${{ needs.fetch-notion.outputs.notion_json }}
+          REPO:           ${{ github.repository }}
+          ISSUE_NUMBER:   ${{ inputs.issue_number }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          ISSUE_NUMBER="${{ inputs.issue_number }}"
-          REPO="${{ github.repository }}"
-          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
 
-          cat > /tmp/pr_body.md << PREOF
-          ### Summary:
-          - Control page verified
-          - Split test code removed from control page
-          - PR created
+          node - << 'SCRIPT'
+          const fs   = require('fs');
+          const repo = process.env.REPO;
+          const num  = process.env.ISSUE_NUMBER;
 
-          ### GTMetrix Test URLs
-          ${CONTROL_URL}
+          const controlUrl = process.env.CONTROL_URL || '';
 
-          ### Issue
-          https://github.com/${REPO}/issues/${ISSUE_NUMBER}
-          PREOF
+          const raw = process.env.NOTION_JSON || '';
+          console.log(`[debug] NOTION_JSON length=${raw.length} prefix=${raw.slice(0,80)}`);
+          let notionSection = '';
+          if (raw) {
+            const n = JSON.parse(raw);
+            const row = (label, val) => val && String(val).trim()
+              ? `| ${label} | ${String(val).trim()} |\n` : '';
+            notionSection  = '### Notion Page Data:\n\n';
+            notionSection += '| Field | Value |\n|:---|:---|\n';
+            notionSection += row('Domain Name',     n.domain_name);
+            notionSection += row('Product',         n.product);
+            notionSection += row('Type',            n.type);
+            notionSection += row('Buyer / Agency',  n.buyer_agency);
+            notionSection += row('GTM',             n.gtm);
+            notionSection += row('Meta Pixel',      n.meta_pixel);
+            notionSection += row('GDPR',            n.gdpr === true ? 'Yes' : null);
+            notionSection += row('Samcart Domain',  n.samcart_domain);
+            notionSection += row('1 Pack Checkout', n.checkout_1_pack);
+            notionSection += row('3 Pack Checkout', n.checkout_3_pack);
+            notionSection += row('6 Pack Checkout', n.checkout_6_pack);
+            notionSection += row('9 Pack Checkout', n.checkout_9_pack);
+            notionSection += row('Marketplace',     n.marketplace);
+            notionSection += row('Google Accounts', n.google_accounts);
+            notionSection += row('Taboola Pixel',   n.taboola_pixel);
+            notionSection += row('TikTok Pixel',    n.tiktok_pixel);
+            notionSection += row('Offer ID',        n.offer_id);
+          }
 
-          [ -n "$LINEAR_ID" ] && printf '\nResolves %s' "$LINEAR_ID" >> /tmp/pr_body.md
+          const linearId = process.env.LINEAR_ID || '';
+          const body = [
+            '### Summary:',
+            '- Control page verified',
+            '- Split test code removed from control page',
+            '- PR created',
+            '',
+            notionSection.trim(),
+            '',
+            '### GTMetrix Test URLs',
+            controlUrl,
+            '',
+            '### Issue',
+            `https://github.com/${repo}/issues/${num}`,
+            ...(linearId ? ['', `Resolves ${linearId}`] : []),
+          ].join('\n');
+
+          fs.writeFileSync('/tmp/pr_body.md', body);
+          SCRIPT
 
           ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title --jq '.title')
           PR_TITLE="$ISSUE_TITLE"
@@ -502,7 +601,7 @@ jobs:
   # ── Job: Update comment on any failure ─────────────────────────────────────
   handle-failure:
     name: Handle Failure
-    needs: [parse-issue, st-on-check-paths, add-split-test-code, st-off-check-paths, remove-split-test-code]
+    needs: [parse-issue, fetch-notion, st-on-check-paths, add-split-test-code, st-off-check-paths, remove-split-test-code]
     runs-on: ubuntu-latest
     if: >-
       failure() &&
