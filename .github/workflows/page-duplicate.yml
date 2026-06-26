@@ -258,9 +258,8 @@ jobs:
 
           node - << 'SCRIPT'
           const fs   = require('fs');
-          const repo     = process.env.REPO;
-          const num      = process.env.ISSUE_NUMBER;
-          const linearId = process.env.LINEAR_ID || '';
+          const repo = process.env.REPO;
+          const num  = process.env.ISSUE_NUMBER;
 
           const gtmetrixUrls = (process.env.GTMETRIX_URLS || '')
             .split('\n').filter(Boolean).map(u => `- ${u}`).join('\n');
@@ -306,7 +305,6 @@ jobs:
             '',
             '### Issue',
             `https://github.com/${repo}/issues/${num}`,
-            ...(linearId ? ['', '### Linear', linearId] : []),
           ].join('\n');
 
           fs.writeFileSync('/tmp/pr_body.md', body);
