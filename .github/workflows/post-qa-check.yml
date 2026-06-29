@@ -105,7 +105,7 @@ jobs:
             let details = '---\n### Post Quality Assurance\n\n';
             for (const url of urls) {
               details += 'Page: ' + url + '\n\n';
-              details += '<!-- linear:table-colwidths:215,154 -->\n';
+              details += '<!-- linear:table-colwidths:298,154 -->\n';
               details += '| Post QA Items | Status |\n';
               details += '|:---|:---|\n';
               for (const check of checks) {
