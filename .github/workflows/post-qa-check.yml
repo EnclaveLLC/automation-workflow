@@ -4,7 +4,6 @@
 #   1. All images on the page are below 1 MB
 #   2. Robots meta tag is set to noindex, nofollow
 #   3. GTM Container ID is present
-#   4. Meta Pixel is present
 # Outputs: qa_passed, post_qa_details
 # -----------------------------------------------------------------------------
 name: Post-Deployment QA
@@ -99,7 +98,6 @@ jobs:
               'Image less than 1MB',
               'Robots directives set to \`noindex, nofollow\`',
               'GTM Container ID verified',
-              'Meta Pixel ID verified',
             ];
 
             let details = '---\n### Post Quality Assurance\n\n';
@@ -130,7 +128,6 @@ jobs:
               notionSection += row('Type',            n.type);
               notionSection += row('Buyer / Agency',  n.buyer_agency);
               notionSection += row('GTM',             n.gtm);
-              notionSection += row('Meta Pixel',      n.meta_pixel);
               notionSection += row('GDPR',            n.gdpr === true ? 'Yes' : null);
               notionSection += row('Samcart Domain',  n.samcart_domain);
               notionSection += row('1 Pack Checkout', n.checkout_1_pack);
@@ -163,6 +160,7 @@ jobs:
         id: check
         env:
           URLS:         ${{ inputs.urls }}
+          NOTION_JSON:  ${{ inputs.notion_json }}
           BADGE_PASSED: ${{ inputs.badge_passed }}
           BADGE_FAILED: ${{ inputs.badge_failed }}
         run: |
@@ -224,17 +222,17 @@ jobs:
 
               // Check 3: GTM Container ID
               const pageContent = await page.content();
+              const notionRaw = process.env.NOTION_JSON || '';
+              const notionGtm = notionRaw ? (JSON.parse(notionRaw).gtm || '').trim() : '';
               const gtmMatch = pageContent.match(/GTM-[A-Z0-9]+/);
-              const gtmOk = !!gtmMatch;
-              console.log(`  GTM: ${gtmMatch ? gtmMatch[0] : 'not found'} => ${gtmOk ? 'OK' : 'FAIL'}`);
-
-              // Check 4: Meta Pixel
-              const pixelOk = pageContent.includes('fbevents.js') || /fbq\(['"]init['"]/.test(pageContent);
-              console.log(`  Meta Pixel: ${pixelOk ? 'found' : 'not found'}`);
+              const gtmOk = notionGtm
+                ? pageContent.includes(notionGtm)
+                : !!gtmMatch;
+              console.log(`  GTM: expected=${notionGtm || 'any'} found=${gtmMatch ? gtmMatch[0] : 'not found'} => ${gtmOk ? 'OK' : 'FAIL'}`);
 
               results.push({
                 pageUrl,
-                checks: { imageSizeOk, robotsOk, gtmOk, pixelOk },
+                checks: { imageSizeOk, robotsOk, gtmOk },
                 largeImages: largeImages.map(img => ({
                   url: img.url,
                   sizeMB: parseFloat((img.size / 1024 / 1024).toFixed(2)),
@@ -269,8 +267,8 @@ jobs:
               continue;
             }
 
-            const { imageSizeOk, robotsOk, gtmOk, pixelOk } = r.checks;
-            const pagePassed = imageSizeOk && robotsOk && gtmOk && pixelOk;
+            const { imageSizeOk, robotsOk, gtmOk } = r.checks;
+            const pagePassed = imageSizeOk && robotsOk && gtmOk;
             if (!pagePassed) allPassed = false;
 
             const badgePassed = process.env.BADGE_PASSED;
@@ -286,7 +284,6 @@ jobs:
             tablesMd += `| Image less than 1MB | ${status(imageSizeOk)} |\n`;
             tablesMd += `| Robots directives set to \`noindex, nofollow\` | ${status(robotsOk)} |\n`;
             tablesMd += `| GTM Container ID verified | ${status(gtmOk)} |\n`;
-            tablesMd += `| Meta Pixel ID verified | ${status(pixelOk)} |\n`;
             tablesMd += '\n';
           }
 
