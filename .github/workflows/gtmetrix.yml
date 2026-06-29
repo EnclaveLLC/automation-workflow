@@ -169,7 +169,7 @@ jobs:
           const rows = statusData.map(row => {
             const badge = badgeMap[row.status] || badgeMap.waiting;
             const result = completedResults[row.url];
-            if (row.status === 'completed' && result) {
+            if ((row.status === 'completed' || row.status === 'aborted') && result) {
               return `| ${row.url} | <img src="${badge}" width="120" data-linear-height="20"> | ${result.grade} | ${result.performance}% | ${result.structure}% |`;
             }
             return `| ${row.url} | <img src="${badge}" width="120" data-linear-height="20"> | - | - | - |`;
@@ -283,6 +283,29 @@ jobs:
             done
 
             if [ "$URL_ABORTED" = "true" ]; then
+              PARTIAL_BEST=$(node -e "
+                const fs = require('fs');
+                const runs = JSON.parse(fs.readFileSync('$RUNS_FILE', 'utf8'));
+                if (!runs.length) { process.stdout.write(''); process.exit(0); }
+                const best = runs.reduce((a, b) =>
+                  b.performance > a.performance ? b :
+                  b.performance === a.performance && b.structure > a.structure ? b : a
+                );
+                best.selected_from = runs.length;
+                best.aborted = true;
+                process.stdout.write(JSON.stringify(best));
+              ")
+              if [ -n "$PARTIAL_BEST" ]; then
+                echo "$PARTIAL_BEST" > /tmp/gtmetrix_partial_best.json
+                node -e "
+                  const fs = require('fs');
+                  const arr = JSON.parse(fs.readFileSync('$TMPFILE', 'utf8'));
+                  const entry = JSON.parse(fs.readFileSync('/tmp/gtmetrix_partial_best.json', 'utf8'));
+                  arr.push(entry);
+                  fs.writeFileSync('$TMPFILE', JSON.stringify(arr, null, 2));
+                "
+                echo "=== Partial best for $URL (aborted): $(cat /tmp/gtmetrix_partial_best.json) ==="
+              fi
               update_comment "" ""
               if [ -n "$COMMENT_ID" ]; then
                 gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
@@ -367,11 +390,20 @@ jobs:
           const failedUrls = (process.env.FAILED_URLS || '').split('\n').filter(Boolean);
           const abortedUrls = (process.env.ABORTED_URLS || '').split('\n').filter(Boolean);
           const rows = [];
+          const resultsByUrl = {};
           for (const r of results) {
+            resultsByUrl[r.url] = r;
+          }
+          for (const r of results.filter(r => !r.aborted)) {
             rows.push(`| ${r.url} | <img src="${process.env.BADGE_COMPLETED}" width="120" data-linear-height="20"> | ${r.grade} | ${r.performance}% | ${r.structure}% |`);
           }
           for (const url of abortedUrls) {
-            rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120" data-linear-height="20"> | - | - | - |`);
+            const r = resultsByUrl[url];
+            if (r) {
+              rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120" data-linear-height="20"> | ${r.grade} | ${r.performance}% | ${r.structure}% |`);
+            } else {
+              rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120" data-linear-height="20"> | - | - | - |`);
+            }
           }
           for (const url of failedUrls) {
             rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120" data-linear-height="20"> | - | - | - |`);
@@ -397,7 +429,13 @@ jobs:
           SCRIPT
           node /tmp/build_gtm_table.js > /tmp/gtm_details.txt
 
-          GTM_BADGE=$([ -s /tmp/gtm_details.txt ] && echo "completed" || echo "failed")
+          if [ -n "$ABORTED_URLS" ]; then
+            GTM_BADGE="aborted"
+          elif [ -s /tmp/gtm_details.txt ]; then
+            GTM_BADGE="completed"
+          else
+            GTM_BADGE="failed"
+          fi
 
           CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
           echo "$CURRENT" > /tmp/current_body.txt
