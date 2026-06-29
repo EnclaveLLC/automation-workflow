@@ -94,10 +94,12 @@ jobs:
             );
 
             const urls = (process.env.URLS || '').split('\n').filter(Boolean);
+            const notionRawPre = process.env.NOTION_JSON || '';
+            const notionGtmPre = notionRawPre ? (JSON.parse(notionRawPre).gtm || '').trim() : '';
             const checks = [
               'Image less than 1MB',
               'Robots directives set to \`noindex, nofollow\`',
-              'GTM Container ID verified',
+              notionGtmPre ? \`GTM Container ID (\${notionGtmPre}) verified\` : 'GTM Container ID verified',
             ];
 
             let details = '---\n### Post Quality Assurance\n\n';
@@ -110,32 +112,6 @@ jobs:
                 details += '| ' + check + ' | <img src=\"' + process.env.BADGE_IN_PROGRESS + '\" width=\"120\" data-linear-height=\"20\"> |\n';
               }
               details += '\n';
-            }
-
-            const raw = process.env.NOTION_JSON || '';
-            if (raw) {
-              const n = JSON.parse(raw);
-              const row = (label, val) => val && String(val).trim()
-                ? \`| \${label} | \${String(val).trim()} |\n\`
-                : '';
-
-              let notionSection = '---\n### Domain Reference (Notion)\n\n';
-              notionSection += '<!-- linear:table-colwidths:215,300 -->\n';
-              notionSection += '| Field | Value |\n';
-              notionSection += '|:---|:---|\n';
-              notionSection += row('Domain Name',     n.domain_name);
-              notionSection += row('Product',         n.product);
-              notionSection += row('Type',            n.type);
-              notionSection += row('Buyer / Agency',  n.buyer_agency);
-              notionSection += row('GTM',             n.gtm);
-              notionSection += row('GDPR',            n.gdpr === true ? 'Yes' : null);
-              notionSection += row('Samcart Domain',  n.samcart_domain);
-              notionSection += row('1 Pack Checkout', n.checkout_1_pack);
-              notionSection += row('3 Pack Checkout', n.checkout_3_pack);
-              notionSection += row('6 Pack Checkout', n.checkout_6_pack);
-              notionSection += row('9 Pack Checkout', n.checkout_9_pack);
-
-              details += '\n' + notionSection.trim();
             }
 
             body = body.replace(
@@ -280,7 +256,7 @@ jobs:
             tablesMd += `|:---|:---|\n`;
             tablesMd += `| Image less than 1MB | ${status(imageSizeOk)} |\n`;
             tablesMd += `| Robots directives set to \`noindex, nofollow\` | ${status(robotsOk)} |\n`;
-            tablesMd += `| GTM Container ID verified | ${status(gtmOk)} |\n`;
+            tablesMd += `| GTM Container ID (${notionGtm}) verified | ${status(gtmOk)} |\n`;
             tablesMd += '\n';
           }
 
