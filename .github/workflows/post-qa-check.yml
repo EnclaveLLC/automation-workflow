@@ -251,7 +251,7 @@ jobs:
               : '<img src="' + badgeFailed + '" width="120" data-linear-height="20">';
 
             tablesMd += `Page: ${r.pageUrl}\n\n`;
-            tablesMd += '<!-- linear:table-colwidths:215,154 -->\n';
+            tablesMd += '<!-- linear:table-colwidths:298,154 -->\n';
             tablesMd += `| Post QA Items | Status |\n`;
             tablesMd += `|:---|:---|\n`;
             tablesMd += `| Image less than 1MB | ${status(imageSizeOk)} |\n`;
