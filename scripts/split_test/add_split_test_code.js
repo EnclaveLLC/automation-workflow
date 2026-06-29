@@ -4,10 +4,16 @@ const fs = require('fs');
 const path = require('path');
 
 const controlPath = (process.env.CONTROL_PATH || '').replace(/^\//, '');
+const controlUrl  = process.env.CONTROL_URL || '';
 const variations  = JSON.parse(process.env.VARIATIONS || '[]');
 
 if (!controlPath) {
   console.error('ERROR: CONTROL_PATH is not set.');
+  process.exit(1);
+}
+
+if (!controlUrl) {
+  console.error('ERROR: CONTROL_URL is not set.');
   process.exit(1);
 }
 
@@ -19,7 +25,7 @@ if (!fs.existsSync(indexFile)) {
 }
 
 const urlEntries = [
-  '"' + controlPath + '$qs"',
+  '"' + controlUrl + '$qs"',
   ...variations.map(v => '"' + v.url + '$qs"'),
 ].map(e => '    ' + e).join(',\n');
 

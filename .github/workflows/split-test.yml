@@ -202,6 +202,7 @@ jobs:
     env:
       GH_TOKEN:     ${{ github.token }}
       CONTROL_PATH: ${{ needs.parse-issue.outputs.control_path }}
+      CONTROL_URL:  ${{ needs.parse-issue.outputs.control_url }}
       VARIATIONS:   ${{ needs.parse-issue.outputs.variations }}
       COMMENT_ID:   ${{ needs.parse-issue.outputs.comment_id }}
 
