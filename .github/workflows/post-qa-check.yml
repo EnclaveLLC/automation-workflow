@@ -98,6 +98,7 @@ jobs:
             const notionGtmPre = notionRawPre ? (JSON.parse(notionRawPre).gtm || '').trim() : '';
             const checks = [
               'Image less than 1MB',
+              'Images served from CloudFront CDN',
               'Robots set to \`noindex, nofollow\`',
               notionGtmPre ? \`GTM ID (\${notionGtmPre}) verified\` : 'GTM ID verified',
             ];
@@ -186,7 +187,14 @@ jobs:
                 console.log(`  OVERSIZED: ${img.url} (${(img.size / 1024 / 1024).toFixed(2)} MB)`)
               );
 
-              // Check 2: Robots noindex, nofollow (X-Robots-Tag header or meta tag)
+              // Check 2: Images served from CloudFront CDN
+              const imgSrcs = await page.$$eval('img', imgs => imgs.map(img => img.getAttribute('src')).filter(Boolean));
+              const nonCloudfrontImgs = imgSrcs.filter(src => !src.includes('d3j6ngx7p7lglj.cloudfront.net'));
+              const cloudfrontOk = nonCloudfrontImgs.length === 0;
+              console.log(`  CloudFront: ${imgSrcs.length} img tags, ${nonCloudfrontImgs.length} not from CloudFront => ${cloudfrontOk ? 'OK' : 'FAIL'}`);
+              nonCloudfrontImgs.forEach(src => console.log(`  NON-CLOUDFRONT: ${src}`));
+
+              // Check 3: Robots noindex, nofollow (X-Robots-Tag header or meta tag)
               const xRobotsTag = (response && response.headers()['x-robots-tag'] || '').toLowerCase();
               const metaRobots = await page
                 .$eval('meta[name="robots"]', el => el.getAttribute('content'))
@@ -195,7 +203,7 @@ jobs:
               const robotsOk = robotsSource.includes('noindex') && robotsSource.includes('nofollow');
               console.log(`  Robots: ${robotsSource || 'not found'} => ${robotsOk ? 'OK' : 'FAIL'}`);
 
-              // Check 3: GTM ID
+              // Check 4: GTM ID
               const pageContent = await page.content();
               const notionRaw = process.env.NOTION_JSON || '';
               const notionGtm = notionRaw ? (JSON.parse(notionRaw).gtm || '').trim() : '';
@@ -205,7 +213,7 @@ jobs:
 
               results.push({
                 pageUrl,
-                checks: { imageSizeOk, robotsOk, gtmOk },
+                checks: { imageSizeOk, cloudfrontOk, robotsOk, gtmOk },
                 largeImages: largeImages.map(img => ({
                   url: img.url,
                   sizeMB: parseFloat((img.size / 1024 / 1024).toFixed(2)),
@@ -243,8 +251,8 @@ jobs:
               continue;
             }
 
-            const { imageSizeOk, robotsOk, gtmOk } = r.checks;
-            const pagePassed = imageSizeOk && robotsOk && gtmOk;
+            const { imageSizeOk, cloudfrontOk, robotsOk, gtmOk } = r.checks;
+            const pagePassed = imageSizeOk && cloudfrontOk && robotsOk && gtmOk;
             if (!pagePassed) allPassed = false;
 
             const badgePassed = process.env.BADGE_PASSED;
@@ -258,6 +266,7 @@ jobs:
             tablesMd += `| Post QA Items | Status |\n`;
             tablesMd += `|:---|:---|\n`;
             tablesMd += `| Image less than 1MB | ${status(imageSizeOk)} |\n`;
+            tablesMd += `| Images served from CloudFront CDN | ${status(cloudfrontOk)} |\n`;
             tablesMd += `| Robots set to \`noindex, nofollow\` | ${status(robotsOk)} |\n`;
             tablesMd += `| GTM ID (${notionGtm}) verified | ${status(gtmOk)} |\n`;
             tablesMd += '\n';
