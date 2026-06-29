@@ -99,7 +99,7 @@ jobs:
             const checks = [
               'Image less than 1MB',
               'Robots directives set to \`noindex, nofollow\`',
-              notionGtmPre ? \`GTM Container ID (\${notionGtmPre}) verified\` : 'GTM Container ID verified',
+              notionGtmPre ? \`GTM ID (\${notionGtmPre}) verified\` : 'GTM ID verified',
             ];
 
             let details = '---\n### Post Quality Assurance\n\n';
@@ -195,7 +195,7 @@ jobs:
               const robotsOk = robotsSource.includes('noindex') && robotsSource.includes('nofollow');
               console.log(`  Robots: ${robotsSource || 'not found'} => ${robotsOk ? 'OK' : 'FAIL'}`);
 
-              // Check 3: GTM Container ID
+              // Check 3: GTM ID
               const pageContent = await page.content();
               const notionRaw = process.env.NOTION_JSON || '';
               const notionGtm = notionRaw ? (JSON.parse(notionRaw).gtm || '').trim() : '';
@@ -259,7 +259,7 @@ jobs:
             tablesMd += `|:---|:---|\n`;
             tablesMd += `| Image less than 1MB | ${status(imageSizeOk)} |\n`;
             tablesMd += `| Robots directives set to \`noindex, nofollow\` | ${status(robotsOk)} |\n`;
-            tablesMd += `| GTM Container ID (${notionGtm}) verified | ${status(gtmOk)} |\n`;
+            tablesMd += `| GTM ID (${notionGtm}) verified | ${status(gtmOk)} |\n`;
             tablesMd += '\n';
           }
 
