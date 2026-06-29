@@ -189,8 +189,9 @@ jobs:
                 );
               });
 
+              let response;
               try {
-                await page.goto(pageUrl, { waitUntil: 'networkidle', timeout: 60000 });
+                response = await page.goto(pageUrl, { waitUntil: 'networkidle', timeout: 60000 });
                 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
                 await page.waitForTimeout(3000);
               } catch (e) {
@@ -209,16 +210,14 @@ jobs:
                 console.log(`  OVERSIZED: ${img.url} (${(img.size / 1024 / 1024).toFixed(2)} MB)`)
               );
 
-              // Check 2: Robots noindex, nofollow
-              const robotsContent = await page
+              // Check 2: Robots noindex, nofollow (X-Robots-Tag header or meta tag)
+              const xRobotsTag = (response && response.headers()['x-robots-tag'] || '').toLowerCase();
+              const metaRobots = await page
                 .$eval('meta[name="robots"]', el => el.getAttribute('content'))
                 .catch(() => null);
-              const robotsOk = !!(
-                robotsContent &&
-                robotsContent.toLowerCase().includes('noindex') &&
-                robotsContent.toLowerCase().includes('nofollow')
-              );
-              console.log(`  Robots: ${robotsContent || 'not found'} => ${robotsOk ? 'OK' : 'FAIL'}`);
+              const robotsSource = xRobotsTag || (metaRobots || '').toLowerCase();
+              const robotsOk = robotsSource.includes('noindex') && robotsSource.includes('nofollow');
+              console.log(`  Robots: ${robotsSource || 'not found'} => ${robotsOk ? 'OK' : 'FAIL'}`);
 
               // Check 3: GTM Container ID
               const pageContent = await page.content();
