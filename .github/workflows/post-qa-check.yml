@@ -225,9 +225,7 @@ jobs:
               const notionRaw = process.env.NOTION_JSON || '';
               const notionGtm = notionRaw ? (JSON.parse(notionRaw).gtm || '').trim() : '';
               const gtmMatch = pageContent.match(/GTM-[A-Z0-9]+/);
-              const gtmOk = notionGtm
-                ? pageContent.includes(notionGtm)
-                : !!gtmMatch;
+              const gtmOk = !!notionGtm && pageContent.includes(notionGtm);
               console.log(`  GTM: expected=${notionGtm || 'any'} found=${gtmMatch ? gtmMatch[0] : 'not found'} => ${gtmOk ? 'OK' : 'FAIL'}`);
 
               results.push({
