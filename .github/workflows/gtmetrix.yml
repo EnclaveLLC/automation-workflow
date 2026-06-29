@@ -431,7 +431,7 @@ jobs:
         env:
           TEST_RESULTS: ${{ steps.run_tests.outputs.test_results }}
         run: |
-          node -e "
+          WROTE_ENTRIES=$(node -e "
             const fs = require('fs');
             const histPath = 'reports/gtmetrix-history.json';
             fs.mkdirSync('reports', { recursive: true });
@@ -443,12 +443,19 @@ jobs:
               } catch {}
             }
             const newEntries = JSON.parse(process.env.TEST_RESULTS || '[]');
+            if (!newEntries.length) { process.stdout.write('false'); process.exit(0); }
             fs.writeFileSync(histPath, JSON.stringify([...existing, ...newEntries], null, 2));
-          "
+            process.stdout.write('true');
+          ")
+
+          if [ "$WROTE_ENTRIES" != "true" ]; then
+            echo "No new GTmetrix results to commit (tests may have been aborted or failed)."
+            exit 0
+          fi
 
           git config user.name "badges-action[bot]"
           git config user.email "badges-action[bot]@users.noreply.github.com"
           git add reports/gtmetrix-history.json
-          git commit -m "Update GTmetrix history" || echo "Nothing to commit"
+          git commit -m "Update GTmetrix history"
           git pull --rebase origin ${{ github.event.pull_request.base.ref || github.ref_name }}
           git push
