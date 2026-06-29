@@ -230,6 +230,9 @@ jobs:
           const results = JSON.parse(fs.readFileSync('/tmp/post_qa_results.json', 'utf8'));
           const outputFile = process.env.GITHUB_OUTPUT;
 
+          const notionRaw = process.env.NOTION_JSON || '';
+          const notionGtm = notionRaw ? (JSON.parse(notionRaw).gtm || '').trim() : '';
+
           let allPassed = true;
           let tablesMd = '';
 
