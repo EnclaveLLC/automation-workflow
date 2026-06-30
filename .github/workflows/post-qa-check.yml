@@ -47,8 +47,8 @@ on:
         description: "Image URL for the failed status badge"
         required: false
         type: string
-      notion_json:
-        description: "All Notion fields as a single JSON object"
+      gtm_id:
+        description: "GTM container ID (e.g. GTM-XXXXXXX)"
         required: false
         type: string
     outputs:
@@ -79,7 +79,7 @@ jobs:
           COMMENT_ID:        ${{ inputs.comment_id }}
           BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
           URLS:              ${{ inputs.urls }}
-          NOTION_JSON:       ${{ inputs.notion_json }}
+          GTM_ID:            ${{ inputs.gtm_id }}
         run: |
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body' \
             > /tmp/current_body.txt 2>/dev/null || exit 0
@@ -94,8 +94,7 @@ jobs:
             );
 
             const urls = (process.env.URLS || '').split('\n').filter(Boolean);
-            const notionRawPre = process.env.NOTION_JSON || '';
-            const notionGtmPre = notionRawPre ? (JSON.parse(notionRawPre).gtm || '').trim() : '';
+            const notionGtmPre = (process.env.GTM_ID || '').trim();
             const checks = [
               'Image less than 1MB',
               'Images served from CloudFront CDN',
@@ -137,7 +136,7 @@ jobs:
         id: check
         env:
           URLS:         ${{ inputs.urls }}
-          NOTION_JSON:  ${{ inputs.notion_json }}
+          GTM_ID:       ${{ inputs.gtm_id }}
           BADGE_PASSED: ${{ inputs.badge_passed }}
           BADGE_FAILED: ${{ inputs.badge_failed }}
         run: |
@@ -205,8 +204,7 @@ jobs:
 
               // Check 4: GTM ID
               const pageContent = await page.content();
-              const notionRaw = process.env.NOTION_JSON || '';
-              const notionGtm = notionRaw ? (JSON.parse(notionRaw).gtm || '').trim() : '';
+              const notionGtm = (process.env.GTM_ID || '').trim();
               const gtmMatch = pageContent.match(/GTM-[A-Z0-9]+/);
               const gtmOk = !!notionGtm && pageContent.includes(notionGtm);
               console.log(`  GTM: expected=${notionGtm || 'any'} found=${gtmMatch ? gtmMatch[0] : 'not found'} => ${gtmOk ? 'OK' : 'FAIL'}`);
@@ -238,8 +236,7 @@ jobs:
           const results = JSON.parse(fs.readFileSync('/tmp/post_qa_results.json', 'utf8'));
           const outputFile = process.env.GITHUB_OUTPUT;
 
-          const notionRaw = process.env.NOTION_JSON || '';
-          const notionGtm = notionRaw ? (JSON.parse(notionRaw).gtm || '').trim() : '';
+          const notionGtm = (process.env.GTM_ID || '').trim();
 
           let allPassed = true;
           let tablesMd = '';

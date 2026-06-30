@@ -190,8 +190,9 @@ jobs:
     needs: [fetching-info]
     runs-on: ubuntu-latest
     outputs:
-      issue_url:   ${{ steps.extract.outputs.issue_url }}
+      issue_url:    ${{ steps.extract.outputs.issue_url }}
       gtmetrix_url: ${{ steps.extract.outputs.gtmetrix_url }}
+      gtm:          ${{ steps.extract.outputs.gtm }}
     steps:
       - name: Checkout automation-workflow scripts
         uses: actions/checkout@v4
@@ -211,9 +212,11 @@ jobs:
 
           ISSUE_URL=$(node -e "process.stdout.write(require('/tmp/parse-pr.json').issueUrl)")
           GTMETRIX_URLS=$(node -e "process.stdout.write(require('/tmp/parse-pr.json').gtmetrixUrls.join('\n'))")
+          GTM=$(node -e "process.stdout.write(require('/tmp/parse-pr.json').gtm || '')")
 
           echo "issue_url=${ISSUE_URL}"
           echo "gtmetrix_url=${GTMETRIX_URLS}"
+          echo "gtm=${GTM}"
 
           if [ -n "$ISSUE_URL" ]; then
             echo "issue_url=${ISSUE_URL}" >> "$GITHUB_OUTPUT"
@@ -225,6 +228,9 @@ jobs:
               echo "${GTMETRIX_URLS}"
               echo "${DELIM}"
             } >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$GTM" ]; then
+            echo "gtm=${GTM}" >> "$GITHUB_OUTPUT"
           fi
 
   # ---------------------------------------------------------------------------
@@ -328,6 +334,7 @@ jobs:
       urls: ${{ needs.parse-pr.outputs.gtmetrix_url }}
       issue_url: ${{ needs.parse-pr.outputs.issue_url }}
       comment_id: ${{ needs.fetching-info.outputs.comment_id }}
+      gtm_id: ${{ needs.parse-pr.outputs.gtm }}
       badge_completed: ${{ inputs.badge_completed }}
       badge_aborted: ${{ inputs.badge_aborted }}
       badge_in_progress: ${{ inputs.badge_in_progress }}

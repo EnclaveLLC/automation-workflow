@@ -27,15 +27,36 @@ function extractSection(headerRe) {
   return urls;
 }
 
+function extractNotionField(fieldName) {
+  let inSection = false;
+  for (const line of lines) {
+    if (/^#{1,6}\s+notion page data/i.test(line.trim())) {
+      inSection = true;
+      continue;
+    }
+    if (inSection) {
+      if (/^#{1,6}\s/.test(line.trim())) break;
+      const m = line.match(/^\|\s*(.+?)\s*\|\s*(.+?)\s*\|/);
+      if (m && m[1].trim().toLowerCase() === fieldName.toLowerCase()) {
+        return m[2].trim();
+      }
+    }
+  }
+  return '';
+}
+
 const gtmetrixUrls = extractSection(/^#{1,6}\s+gtmetrix test urls?$/);
 const issueUrls    = extractSection(/^#{1,6}\s+issue\s*$/);
+const gtm          = extractNotionField('GTM');
 
 const result = {
   issueUrl: issueUrls[0] || '',
   gtmetrixUrls,
+  gtm,
 };
 
 console.log('GTMetrix URLs (' + gtmetrixUrls.length + '):', gtmetrixUrls);
 console.log('Issue URL:', result.issueUrl);
+console.log('GTM:', gtm);
 
 fs.writeFileSync('/tmp/parse-pr.json', JSON.stringify(result));
