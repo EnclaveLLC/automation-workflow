@@ -209,6 +209,7 @@ jobs:
               | awk 'tolower($0) ~ /^### issue[[:space:]]*$/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH); exit}' \
               | tr -d '\r')
 
+            # issue_url written FIRST — must precede any heredoc or parser swallows it
             if [ -n "$FIRST_ISSUE" ]; then
               echo "----- Issue URL ------"
               echo "$FIRST_ISSUE"
@@ -271,11 +272,50 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   # ---------------------------------------------------------------------------
+  # Job 3: Validate fetching-info outputs (debug — always runs after PR info)
+  # ---------------------------------------------------------------------------
+  validate-outputs:
+    name: Validate PR Info Outputs
+    needs: [fetching-info]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo and validate issue_url and gtmetrix_url
+        run: |
+          ISSUE_URL="${{ needs.fetching-info.outputs.issue_url }}"
+          GTMETRIX_URL="${{ needs.fetching-info.outputs.gtmetrix_url }}"
+          COMMENT_ID="${{ needs.fetching-info.outputs.comment_id }}"
+
+          echo "=== fetching-info outputs ==="
+          echo "issue_url    = '${ISSUE_URL}'"
+          echo "gtmetrix_url = '${GTMETRIX_URL}'"
+          echo "comment_id   = '${COMMENT_ID}'"
+          echo "============================================"
+
+          if [ -z "$ISSUE_URL" ]; then
+            echo "⚠️  issue_url is EMPTY"
+          elif echo "$ISSUE_URL" | grep -qE '^https://github\.com/.+/issues/[0-9]+$'; then
+            echo "✅ issue_url format valid"
+          else
+            echo "❌ issue_url format unexpected: '$ISSUE_URL'"
+          fi
+
+          if [ -z "$GTMETRIX_URL" ]; then
+            echo "⚠️  gtmetrix_url is EMPTY"
+          elif echo "$GTMETRIX_URL" | grep -qE '^https?://'; then
+            echo "✅ gtmetrix_url format valid"
+          else
+            echo "❌ gtmetrix_url format unexpected: '$GTMETRIX_URL'"
+          fi
+
+  # ---------------------------------------------------------------------------
   # Job 4: QA Validation (runs after deploys)
   # ---------------------------------------------------------------------------
   pre-qa-check:
     name: Pre QA Validation
-    needs: [fetching-info, deploy-ftp, deploy-aws]
+    needs: [fetching-info, deploy-ftp, deploy-aws, validate-outputs]
+    if: |
+      !cancelled() &&
+      needs.fetching-info.outputs.issue_url != ''
     uses: ./.github/workflows/pre-qa-check.yml
     with:
       issue_url: ${{ needs.fetching-info.outputs.issue_url }}
@@ -295,6 +335,10 @@ jobs:
   gtmetrix:
     name: GTmetrix Check
     needs: [fetching-info, pre-qa-check]
+    if: |
+      !cancelled() &&
+      needs.fetching-info.outputs.gtmetrix_url != '' &&
+      needs.fetching-info.outputs.issue_url != ''
     permissions:
       actions: read
       contents: write
@@ -319,6 +363,10 @@ jobs:
   post-qa-check:
     name: Post QA Validation
     needs: [fetching-info, pre-qa-check]
+    if: |
+      !cancelled() &&
+      needs.fetching-info.outputs.gtmetrix_url != '' &&
+      needs.fetching-info.outputs.issue_url != ''
     permissions:
       contents: read
       issues: write
