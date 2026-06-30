@@ -193,10 +193,16 @@ jobs:
         run: |
           PR_NUMBER="${{ inputs.pr_number }}"
 
-          if [ -z "$PR_NUMBER" ]; then
-            echo "No PR context provided — skipping."
+          echo "=== extract step debug ==="
+          echo "PR_NUMBER = '${PR_NUMBER}'"
+          echo "PR_BODY length = $(printf '%s' "$PR_BODY" | wc -c) chars"
+
+          if [ -z "$PR_BODY" ]; then
+            echo "No PR body provided — skipping URL extraction."
           else
-            echo "Push originated from PR #${PR_NUMBER} — ${{ inputs.pr_title }}"
+            if [ -n "$PR_NUMBER" ]; then
+              echo "Push originated from PR #${PR_NUMBER} — ${{ inputs.pr_title }}"
+            fi
             echo "-------- PR Body --------"
             echo "$PR_BODY"
             echo "-------------------------"
@@ -209,33 +215,28 @@ jobs:
               | awk 'tolower($0) ~ /^### issue[[:space:]]*$/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH); exit}' \
               | tr -d '\r')
 
+            echo "awk GTMETRIX_URLS = '${GTMETRIX_URLS}'"
+            echo "awk FIRST_ISSUE   = '${FIRST_ISSUE}'"
+
             # issue_url written FIRST — must precede any heredoc or parser swallows it
             if [ -n "$FIRST_ISSUE" ]; then
-              echo "----- Issue URL ------"
-              echo "$FIRST_ISSUE"
               echo "issue_url=${FIRST_ISSUE}" >> "$GITHUB_OUTPUT"
+              echo "✅ Wrote issue_url"
             else
-              echo "No issue URL found in PR body."
+              echo "⚠️  No issue URL found in PR body."
             fi
 
             if [ -n "$GTMETRIX_URLS" ]; then
-              echo "---- GTmetrix URLs ----"
-              echo "$GTMETRIX_URLS"
               DELIMITER="GTMETRIX_$(openssl rand -hex 8)"
               {
                 echo "gtmetrix_url<<$DELIMITER"
                 echo "$GTMETRIX_URLS"
                 echo "$DELIMITER"
               } >> "$GITHUB_OUTPUT"
+              echo "✅ Wrote gtmetrix_url"
             else
-              echo "No GTmetrix URLs found in PR body."
+              echo "⚠️  No GTmetrix URLs found in PR body."
             fi
-
-            NOTION_URL=$(echo "$PR_BODY" \
-              | awk 'tolower($0) ~ /^### notion[[:space:]]*$/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH); exit}' \
-              | tr -d '\r')
-
-            echo "-------------------------"
           fi
  
   # ---------------------------------------------------------------------------
