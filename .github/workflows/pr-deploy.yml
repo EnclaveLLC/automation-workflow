@@ -209,6 +209,14 @@ jobs:
               | awk 'tolower($0) ~ /^### issue[[:space:]]*$/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH); exit}' \
               | tr -d '\r')
 
+            if [ -n "$FIRST_ISSUE" ]; then
+              echo "----- Issue URL ------"
+              echo "$FIRST_ISSUE"
+              echo "issue_url=${FIRST_ISSUE}" >> "$GITHUB_OUTPUT"
+            else
+              echo "No issue URL found in PR body."
+            fi
+
             if [ -n "$GTMETRIX_URLS" ]; then
               echo "---- GTmetrix URLs ----"
               echo "$GTMETRIX_URLS"
@@ -220,14 +228,6 @@ jobs:
               } >> "$GITHUB_OUTPUT"
             else
               echo "No GTmetrix URLs found in PR body."
-            fi
-
-            if [ -n "$FIRST_ISSUE" ]; then
-              echo "----- Issue URL ------"
-              echo "$FIRST_ISSUE"
-              echo "issue_url=${FIRST_ISSUE}" >> "$GITHUB_OUTPUT"
-            else
-              echo "No issue URL found in PR body."
             fi
 
             NOTION_URL=$(echo "$PR_BODY" \
