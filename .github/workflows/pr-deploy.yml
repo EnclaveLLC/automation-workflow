@@ -276,9 +276,6 @@ jobs:
   pre-qa-check:
     name: Pre QA Validation
     needs: [fetching-info, deploy-ftp, deploy-aws]
-    if: |
-      !cancelled() &&
-      needs.fetching-info.outputs.issue_url != ''
     uses: ./.github/workflows/pre-qa-check.yml
     with:
       issue_url: ${{ needs.fetching-info.outputs.issue_url }}
