@@ -126,7 +126,7 @@ jobs:
           FAILURES=""
 
           IMAGE_EXTS="jpg jpeg png gif webp svg ico avif bmp tiff"
-          WEB_EXTS="html htm php css js ts json xml txt md scss less htaccess map yaml yml mp4"
+          WEB_EXTS="html htm php css js ts json xml txt md scss less htaccess map yaml yml mp4 ttf otf woff woff2 eot"
 
           # ------------------------------------------------------------------
           # Check 1: Every image file must be smaller than 1MB
