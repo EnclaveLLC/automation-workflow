@@ -2,11 +2,10 @@
 # Workflow: PR Deploy (Reusable)
 # Triggered on merged PRs. Full pipeline:
 #   1.  Fetch PR Info + post initial status comment
-#   2.  Parse Notion database (after PR Info)
-#   3a. FTP deploy     ─┐ parallel (after Notion parse)
-#   3b. AWS deploy     ─┘  each updates its own comment row on finish/skip
-#   4.  Pre QA check       (after deploys — marks Deployment row completed)
-#   5.  GTmetrix check     (after Pre QA)
+#   2a. FTP deploy     ─┐ parallel (after PR Info)
+#   2b. AWS deploy     ─┘  each updates its own comment row on finish/skip
+#   3.  Pre QA check       (after deploys — marks Deployment row completed)
+#   4.  GTmetrix check     (after Pre QA)
 # -----------------------------------------------------------------------------
 name: PR Deploy
 
@@ -68,9 +67,6 @@ on:
         required: false
       GTMETRIX_API_KEY:
         required: false
-      NOTION_TOKEN:
-        required: false
-
 jobs:
 
   # ---------------------------------------------------------------------------
@@ -242,24 +238,11 @@ jobs:
           fi
  
   # ---------------------------------------------------------------------------
-  # Job 2: Parse Notion Database (runs after PR Info, before deploys)
-  # ---------------------------------------------------------------------------
-  parse-notion:
-    name: Parse Notion
-    needs: fetching-info
-    uses: ./.github/workflows/notion-parse.yml
-    with:
-      repo_name: ${{ github.event.repository.name }}
-      comment_id: ${{ needs.fetching-info.outputs.comment_id }}
-    secrets:
-      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-
-  # ---------------------------------------------------------------------------
-  # Job 3a: Deploy via FTP (runs after Notion parse)
+  # Job 2a: Deploy via FTP (runs after PR Info)
   # ---------------------------------------------------------------------------
   deploy-ftp:
     name: FTP Deploy
-    needs: [fetching-info, parse-notion]
+    needs: [fetching-info]
     uses: ./.github/workflows/ftp-deploy.yml
     permissions:
       contents: write
@@ -272,11 +255,11 @@ jobs:
       FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
 
   # ---------------------------------------------------------------------------
-  # Job 3b: Deploy to AWS (runs in parallel with deploy-ftp)
+  # Job 2b: Deploy to AWS (runs in parallel with deploy-ftp)
   # ---------------------------------------------------------------------------
   deploy-aws:
     name: AWS Deploy
-    needs: [fetching-info, parse-notion]
+    needs: [fetching-info]
     uses: ./.github/workflows/aws-deploy.yml
     permissions:
       contents: write
@@ -292,7 +275,7 @@ jobs:
   # ---------------------------------------------------------------------------
   pre-qa-check:
     name: Pre QA Validation
-    needs: [fetching-info, parse-notion, deploy-ftp, deploy-aws]
+    needs: [fetching-info, deploy-ftp, deploy-aws]
     if: |
       !cancelled() &&
       needs.fetching-info.outputs.issue_url != ''
@@ -342,7 +325,7 @@ jobs:
   # ---------------------------------------------------------------------------
   post-qa-check:
     name: Post QA Validation
-    needs: [fetching-info, parse-notion, pre-qa-check]
+    needs: [fetching-info, pre-qa-check]
     if: |
       !cancelled() &&
       needs.fetching-info.outputs.gtmetrix_url != '' &&
@@ -361,7 +344,6 @@ jobs:
       badge_waiting: ${{ inputs.badge_waiting }}
       badge_passed: ${{ inputs.badge_passed }}
       badge_failed: ${{ inputs.badge_failed }}
-      notion_json: ${{ needs.parse-notion.outputs.notion_json }}
 
   # ---------------------------------------------------------------------------
   # Job 6: Mark workflow completed (runs after GTmetrix)
