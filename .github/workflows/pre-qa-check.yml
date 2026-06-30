@@ -186,9 +186,17 @@ jobs:
           # ------------------------------------------------------------------
           # Emit outputs
           # ------------------------------------------------------------------
-          PASSED_CHECKS=""
-          [ "$CHECK1_FAILED" = false ] && PASSED_CHECKS="${PASSED_CHECKS}✅ Image File Size\n"
-          [ "$CHECK2_FAILED" = false ] && PASSED_CHECKS="${PASSED_CHECKS}✅ Web File Extension\n"
+          CHECK_RESULTS=""
+          if [ "$CHECK1_FAILED" = false ]; then
+            CHECK_RESULTS="${CHECK_RESULTS}Check 1: Passed\nEvery image file must be smaller than 1MB\n\n"
+          else
+            CHECK_RESULTS="${CHECK_RESULTS}Check 1: Image size exceeded 1MB\n${CHECK1_FILES}\n"
+          fi
+          if [ "$CHECK2_FAILED" = false ]; then
+            CHECK_RESULTS="${CHECK_RESULTS}Check 2: Passed\nEvery web file must have a recognized extension\n\n"
+          else
+            CHECK_RESULTS="${CHECK_RESULTS}Check 2: Unrecognized file extension\n${CHECK2_FILES}\n"
+          fi
 
           if [ "$QA_PASSED" = "true" ]; then
             echo "✅ All Pre-Deployment QA passed"
@@ -206,8 +214,8 @@ jobs:
           fi
 
           {
-            echo 'passed_checks<<EOF'
-            printf '%b' "$PASSED_CHECKS"
+            echo 'check_results<<EOF'
+            printf '%b' "$CHECK_RESULTS"
             echo EOF
           } >> "$GITHUB_OUTPUT"
 
@@ -217,7 +225,7 @@ jobs:
           GH_TOKEN:        ${{ github.token }}
           COMMENT_ID:      ${{ inputs.comment_id }}
           QA_PASSED:       ${{ steps.qa.outputs.qa_passed }}
-          PASSED_CHECKS:   ${{ steps.qa.outputs.passed_checks }}
+          CHECK_RESULTS:   ${{ steps.qa.outputs.check_results }}
           FAILURE_MESSAGE: ${{ steps.qa.outputs.failure_message }}
           BADGE_COMPLETED:   ${{ inputs.badge_completed }}
           BADGE_ABORTED:     ${{ inputs.badge_aborted }}
@@ -226,11 +234,10 @@ jobs:
         run: |
           if [ "$QA_PASSED" = "true" ]; then
             BADGE_URL="$BADGE_COMPLETED"
-            printf '### Pre Quality Assurance: \n\n All checks passed\n%s' "$PASSED_CHECKS" > /tmp/qa_details.txt
           else
             BADGE_URL="$BADGE_FAILED"
-            printf '### Pre Quality Assurance Failed:\n```\n%s```' "$FAILURE_MESSAGE" > /tmp/qa_details.txt
           fi
+          printf '### Pre Quality Assurance\n\n```\n%s```' "$CHECK_RESULTS" > /tmp/qa_details.txt
 
           CURRENT=$(gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} --jq '.body')
           echo "$CURRENT" > /tmp/current_body.txt
