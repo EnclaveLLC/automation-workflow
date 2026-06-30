@@ -70,7 +70,7 @@ on:
 jobs:
 
   # ---------------------------------------------------------------------------
-  # Job 1: Verify secrets + Fetch PR info + Extract GTmetrix & Issue URLs
+  # Job 1: Verify secrets + Fetch PR info + post initial status comment
   # ---------------------------------------------------------------------------
   fetching-info:
     name: Verify Secrets & Fetch PR Info
@@ -80,8 +80,6 @@ jobs:
       pull-requests: read
       issues: write
     outputs:
-      gtmetrix_url: ${{ steps.extract.outputs.gtmetrix_url }}
-      issue_url: ${{ steps.extract.outputs.issue_url }}
       comment_id: ${{ steps.deploy_comment.outputs.comment_id }}
     steps:
       - name: Post initial workflow status comment
@@ -186,6 +184,18 @@ jobs:
 
       
 
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Parse PR body — extract GTmetrix URLs and issue URL
+  # ---------------------------------------------------------------------------
+  parse-pr:
+    name: Parse PR Body
+    needs: [fetching-info]
+    runs-on: ubuntu-latest
+    outputs:
+      issue_url:   ${{ steps.extract.outputs.issue_url }}
+      gtmetrix_url: ${{ steps.extract.outputs.gtmetrix_url }}
+    steps:
       - name: Checkout automation-workflow scripts
         uses: actions/checkout@v4
         with:
@@ -199,10 +209,29 @@ jobs:
         id: extract
         env:
           PR_BODY: ${{ inputs.pr_body }}
-        run: node .aw/scripts/pr-deploy/parse-pr.js
- 
+        run: |
+          node .aw/scripts/pr-deploy/parse-pr.js
+
+          ISSUE_URL=$(node -e "process.stdout.write(require('/tmp/parse-pr.json').issueUrl)")
+          GTMETRIX_URLS=$(node -e "process.stdout.write(require('/tmp/parse-pr.json').gtmetrixUrls.join('\n'))")
+
+          echo "issue_url=${ISSUE_URL}"
+          echo "gtmetrix_url=${GTMETRIX_URLS}"
+
+          if [ -n "$ISSUE_URL" ]; then
+            echo "issue_url=${ISSUE_URL}" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$GTMETRIX_URLS" ]; then
+            DELIM="GTMETRIX_$(openssl rand -hex 8)"
+            {
+              echo "gtmetrix_url<<${DELIM}"
+              echo "${GTMETRIX_URLS}"
+              echo "${DELIM}"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
   # ---------------------------------------------------------------------------
-  # Job 2a: Deploy via FTP (runs after PR Info)
+  # Job 3a: Deploy via FTP (runs after PR Info)
   # ---------------------------------------------------------------------------
   deploy-ftp:
     name: FTP Deploy
@@ -235,20 +264,20 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   # ---------------------------------------------------------------------------
-  # Job 3: Validate fetching-info outputs (debug — always runs after PR info)
+  # Job 4: Validate parse-pr outputs (debug)
   # ---------------------------------------------------------------------------
   validate-outputs:
     name: Validate PR Info Outputs
-    needs: [fetching-info]
+    needs: [fetching-info, parse-pr]
     runs-on: ubuntu-latest
     steps:
       - name: Echo and validate issue_url and gtmetrix_url
         run: |
-          ISSUE_URL="${{ needs.fetching-info.outputs.issue_url }}"
-          GTMETRIX_URL="${{ needs.fetching-info.outputs.gtmetrix_url }}"
+          ISSUE_URL="${{ needs.parse-pr.outputs.issue_url }}"
+          GTMETRIX_URL="${{ needs.parse-pr.outputs.gtmetrix_url }}"
           COMMENT_ID="${{ needs.fetching-info.outputs.comment_id }}"
 
-          echo "=== fetching-info outputs ==="
+          echo "=== parse-pr outputs ==="
           echo "issue_url    = '${ISSUE_URL}'"
           echo "gtmetrix_url = '${GTMETRIX_URL}'"
           echo "comment_id   = '${COMMENT_ID}'"
@@ -271,17 +300,17 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # Job 4: QA Validation (runs after deploys)
+  # Job 5: QA Validation (runs after deploys)
   # ---------------------------------------------------------------------------
   pre-qa-check:
     name: Pre QA Validation
-    needs: [fetching-info, deploy-ftp, deploy-aws, validate-outputs]
+    needs: [fetching-info, parse-pr, deploy-ftp, deploy-aws, validate-outputs]
     if: |
       !cancelled() &&
-      needs.fetching-info.outputs.issue_url != ''
+      needs.parse-pr.outputs.issue_url != ''
     uses: ./.github/workflows/pre-qa-check.yml
     with:
-      issue_url: ${{ needs.fetching-info.outputs.issue_url }}
+      issue_url: ${{ needs.parse-pr.outputs.issue_url }}
       comment_id: ${{ needs.fetching-info.outputs.comment_id }}
       badge_completed: ${{ inputs.badge_completed }}
       badge_aborted: ${{ inputs.badge_aborted }}
@@ -293,15 +322,15 @@ jobs:
       issues: write
 
   # ---------------------------------------------------------------------------
-  # Job 5a: GTmetrix performance check (runs after pre-QA)
+  # Job 6a: GTmetrix performance check (runs after pre-QA)
   # ---------------------------------------------------------------------------
   gtmetrix:
     name: GTmetrix Check
-    needs: [fetching-info, pre-qa-check]
+    needs: [fetching-info, parse-pr, pre-qa-check]
     if: |
       !cancelled() &&
-      needs.fetching-info.outputs.gtmetrix_url != '' &&
-      needs.fetching-info.outputs.issue_url != ''
+      needs.parse-pr.outputs.gtmetrix_url != '' &&
+      needs.parse-pr.outputs.issue_url != ''
     permissions:
       actions: read
       contents: write
@@ -310,8 +339,8 @@ jobs:
       id-token: write
     uses: ./.github/workflows/gtmetrix.yml
     with:
-      gtmetrix_url: ${{ needs.fetching-info.outputs.gtmetrix_url }}
-      issue_url: ${{ needs.fetching-info.outputs.issue_url }}
+      gtmetrix_url: ${{ needs.parse-pr.outputs.gtmetrix_url }}
+      issue_url: ${{ needs.parse-pr.outputs.issue_url }}
       comment_id: ${{ needs.fetching-info.outputs.comment_id }}
       badge_completed: ${{ inputs.badge_completed }}
       badge_aborted: ${{ inputs.badge_aborted }}
@@ -321,22 +350,22 @@ jobs:
       GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}
   
   # ---------------------------------------------------------------------------
-  # Job 5b: Post QA Validation (runs after pre-QA)
+  # Job 6b: Post QA Validation (runs after pre-QA)
   # ---------------------------------------------------------------------------
   post-qa-check:
     name: Post QA Validation
-    needs: [fetching-info, pre-qa-check]
+    needs: [fetching-info, parse-pr, pre-qa-check]
     if: |
       !cancelled() &&
-      needs.fetching-info.outputs.gtmetrix_url != '' &&
-      needs.fetching-info.outputs.issue_url != ''
+      needs.parse-pr.outputs.gtmetrix_url != '' &&
+      needs.parse-pr.outputs.issue_url != ''
     permissions:
       contents: read
       issues: write
     uses: ./.github/workflows/post-qa-check.yml
     with:
-      urls: ${{ needs.fetching-info.outputs.gtmetrix_url }}
-      issue_url: ${{ needs.fetching-info.outputs.issue_url }}
+      urls: ${{ needs.parse-pr.outputs.gtmetrix_url }}
+      issue_url: ${{ needs.parse-pr.outputs.issue_url }}
       comment_id: ${{ needs.fetching-info.outputs.comment_id }}
       badge_completed: ${{ inputs.badge_completed }}
       badge_aborted: ${{ inputs.badge_aborted }}

@@ -1,6 +1,5 @@
 'use strict';
 const fs = require('fs');
-const crypto = require('crypto');
 
 const body = process.env.PR_BODY || '';
 
@@ -31,18 +30,12 @@ function extractSection(headerRe) {
 const gtmetrixUrls = extractSection(/^#{1,6}\s+gtmetrix test urls?$/);
 const issueUrls    = extractSection(/^#{1,6}\s+issue\s*$/);
 
-const issueUrl    = issueUrls[0] || '';
-const gtmetrixUrl = gtmetrixUrls.join('\n');
+const result = {
+  issueUrl: issueUrls[0] || '',
+  gtmetrixUrls,
+};
 
 console.log('GTMetrix URLs (' + gtmetrixUrls.length + '):', gtmetrixUrls);
-console.log('Issue URL:', issueUrl);
+console.log('Issue URL:', result.issueUrl);
 
-const outFile = process.env.GITHUB_OUTPUT;
-if (outFile) {
-  const delimiter = 'GTMETRIX_' + crypto.randomBytes(8).toString('hex');
-  let out = '';
-  if (issueUrl)    out += `issue_url=${issueUrl}\n`;
-  if (gtmetrixUrl) out += `gtmetrix_url<<${delimiter}\n${gtmetrixUrl}\n${delimiter}\n`;
-  fs.appendFileSync(outFile, out, 'utf8');
-  console.log('Wrote to GITHUB_OUTPUT:', out || '(nothing)');
-}
+fs.writeFileSync('/tmp/parse-pr.json', JSON.stringify(result));
