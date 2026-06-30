@@ -277,6 +277,7 @@ jobs:
     name: Pre QA Validation
     needs: [fetching-info, deploy-ftp, deploy-aws]
     if: |
+      !cancelled() &&
       needs.fetching-info.outputs.issue_url != ''
     uses: ./.github/workflows/pre-qa-check.yml
     with:
@@ -298,6 +299,7 @@ jobs:
     name: GTmetrix Check
     needs: [fetching-info, pre-qa-check]
     if: |
+      !cancelled() &&
       needs.fetching-info.outputs.gtmetrix_url != '' &&
       needs.fetching-info.outputs.issue_url != ''
     permissions:
@@ -325,6 +327,7 @@ jobs:
     name: Post QA Validation
     needs: [fetching-info, pre-qa-check]
     if: |
+      !cancelled() &&
       needs.fetching-info.outputs.gtmetrix_url != '' &&
       needs.fetching-info.outputs.issue_url != ''
     permissions:
@@ -349,6 +352,7 @@ jobs:
     name: Mark Workflow Completed
     needs: [fetching-info, gtmetrix]
     if: |
+      !cancelled() &&
       needs.fetching-info.outputs.comment_id != ''
     runs-on: ubuntu-latest
     permissions:
