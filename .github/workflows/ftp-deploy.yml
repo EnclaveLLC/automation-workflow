@@ -23,6 +23,7 @@ permissions:
 
 jobs:
   check-changes:
+    name: Check File Changes
     runs-on: ubuntu-latest
     outputs:
       has_changes: ${{ steps.uploadcheck.outputs.has_changes }}
