@@ -298,10 +298,6 @@ jobs:
   gtmetrix:
     name: GTmetrix Check
     needs: [fetching-info, pre-qa-check]
-    if: |
-      !cancelled() &&
-      needs.fetching-info.outputs.gtmetrix_url != '' &&
-      needs.fetching-info.outputs.issue_url != ''
     permissions:
       actions: read
       contents: write
@@ -326,10 +322,6 @@ jobs:
   post-qa-check:
     name: Post QA Validation
     needs: [fetching-info, pre-qa-check]
-    if: |
-      !cancelled() &&
-      needs.fetching-info.outputs.gtmetrix_url != '' &&
-      needs.fetching-info.outputs.issue_url != ''
     permissions:
       contents: read
       issues: write
