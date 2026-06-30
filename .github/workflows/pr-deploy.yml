@@ -186,58 +186,20 @@ jobs:
 
       
 
+      - name: Checkout automation-workflow scripts
+        uses: actions/checkout@v4
+        with:
+          repository: EnclaveLLC/automation-workflow
+          ref: main
+          sparse-checkout: scripts/
+          path: .aw
+          token: ${{ github.token }}
+
       - name: Fetch PR body if push is from a merged PR
         id: extract
         env:
           PR_BODY: ${{ inputs.pr_body }}
-        run: |
-          PR_NUMBER="${{ inputs.pr_number }}"
-
-          echo "=== extract step debug ==="
-          echo "PR_NUMBER = '${PR_NUMBER}'"
-          echo "PR_BODY length = $(printf '%s' "$PR_BODY" | wc -c) chars"
-
-          if [ -z "$PR_BODY" ]; then
-            echo "No PR body provided — skipping URL extraction."
-          else
-            if [ -n "$PR_NUMBER" ]; then
-              echo "Push originated from PR #${PR_NUMBER} — ${{ inputs.pr_title }}"
-            fi
-            echo "-------- PR Body --------"
-            echo "$PR_BODY"
-            echo "-------------------------"
-
-            GTMETRIX_URLS=$(echo "$PR_BODY" \
-              | awk 'tolower($0) ~ /^### gtmetrix test urls?/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH)} found && !/https?:\/\// && /^##/{exit}' \
-              | tr -d '\r')
-
-            FIRST_ISSUE=$(echo "$PR_BODY" \
-              | awk 'tolower($0) ~ /^### issue[[:space:]]*$/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH); exit}' \
-              | tr -d '\r')
-
-            echo "awk GTMETRIX_URLS = '${GTMETRIX_URLS}'"
-            echo "awk FIRST_ISSUE   = '${FIRST_ISSUE}'"
-
-            # issue_url written FIRST — must precede any heredoc or parser swallows it
-            if [ -n "$FIRST_ISSUE" ]; then
-              echo "issue_url=${FIRST_ISSUE}" >> "$GITHUB_OUTPUT"
-              echo "✅ Wrote issue_url"
-            else
-              echo "⚠️  No issue URL found in PR body."
-            fi
-
-            if [ -n "$GTMETRIX_URLS" ]; then
-              DELIMITER="GTMETRIX_$(openssl rand -hex 8)"
-              {
-                echo "gtmetrix_url<<$DELIMITER"
-                echo "$GTMETRIX_URLS"
-                echo "$DELIMITER"
-              } >> "$GITHUB_OUTPUT"
-              echo "✅ Wrote gtmetrix_url"
-            else
-              echo "⚠️  No GTmetrix URLs found in PR body."
-            fi
-          fi
+        run: node .aw/scripts/pr-deploy/parse-pr.js
  
   # ---------------------------------------------------------------------------
   # Job 2a: Deploy via FTP (runs after PR Info)
