@@ -182,9 +182,6 @@ jobs:
             -X PATCH \
             -f body="$NEW_BODY" > /dev/null || true
 
-      
-
-
   # ---------------------------------------------------------------------------
   # Job 2: Parse PR body — extract GTmetrix URLs and issue URL
   # ---------------------------------------------------------------------------
@@ -264,47 +261,11 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   # ---------------------------------------------------------------------------
-  # Job 4: Validate parse-pr outputs (debug)
-  # ---------------------------------------------------------------------------
-  validate-outputs:
-    name: Validate PR Info Outputs
-    needs: [fetching-info, parse-pr]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Echo and validate issue_url and gtmetrix_url
-        run: |
-          ISSUE_URL="${{ needs.parse-pr.outputs.issue_url }}"
-          GTMETRIX_URL="${{ needs.parse-pr.outputs.gtmetrix_url }}"
-          COMMENT_ID="${{ needs.fetching-info.outputs.comment_id }}"
-
-          echo "=== parse-pr outputs ==="
-          echo "issue_url    = '${ISSUE_URL}'"
-          echo "gtmetrix_url = '${GTMETRIX_URL}'"
-          echo "comment_id   = '${COMMENT_ID}'"
-          echo "============================================"
-
-          if [ -z "$ISSUE_URL" ]; then
-            echo "⚠️  issue_url is EMPTY"
-          elif echo "$ISSUE_URL" | grep -qE '^https://github\.com/.+/issues/[0-9]+$'; then
-            echo "✅ issue_url format valid"
-          else
-            echo "❌ issue_url format unexpected: '$ISSUE_URL'"
-          fi
-
-          if [ -z "$GTMETRIX_URL" ]; then
-            echo "⚠️  gtmetrix_url is EMPTY"
-          elif echo "$GTMETRIX_URL" | grep -qE '^https?://'; then
-            echo "✅ gtmetrix_url format valid"
-          else
-            echo "❌ gtmetrix_url format unexpected: '$GTMETRIX_URL'"
-          fi
-
-  # ---------------------------------------------------------------------------
   # Job 5: QA Validation (runs after deploys)
   # ---------------------------------------------------------------------------
   pre-qa-check:
     name: Pre QA Validation
-    needs: [fetching-info, parse-pr, deploy-ftp, deploy-aws, validate-outputs]
+    needs: [fetching-info, parse-pr, deploy-ftp, deploy-aws]
     if: |
       !cancelled() &&
       needs.parse-pr.outputs.issue_url != ''
