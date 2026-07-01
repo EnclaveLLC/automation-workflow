@@ -149,7 +149,7 @@ jobs:
                 }
               }
 
-              const rows = ['| Version | Redirects |', '|:---|:---:|'];
+              const rows = ['<!-- linear:table-colwidths:298, 65-->', '| Version | Redirects |', '|:---|:---:|'];
               rows.push(`| ${controlUrl} | ${controlCount} |`);
               for (const v of variations) {
                 rows.push(`| ${v.url} | ${counts.get(v.url) || 0} |`);
