@@ -27,3 +27,14 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+
+  split-test-check:
+    name: Split Test Check
+    if: contains(inputs.comment_body, '@split-test check')
+    uses: ./.github/workflows/split-test-check.yml
+    with:
+      issue_number: ${{ inputs.issue_number }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+    permissions:
+      issues: write
