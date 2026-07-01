@@ -47,7 +47,7 @@ jobs:
           export ISSUE_BODY
           node EnclaveLLC/automation-workflow/scripts/split_test/parse_issue.js
 
-  # ── Job 2: Run 50 requests and report redirect distribution ─────────────────
+  # ── Job 2: Run 50 browser checks and report redirect distribution ────────────
   run-check:
     name: Run Check
     needs: parse-issue
@@ -55,32 +55,36 @@ jobs:
     permissions:
       issues: write
     env:
-      GH_TOKEN:    ${{ github.token }}
-      CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
-      VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
-      COMMENT_ID:  ${{ needs.parse-issue.outputs.comment_id }}
-      REPO:        ${{ inputs.repository }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Run 50 requests and post report
+      - name: Install Playwright
+        run: |
+          npm install playwright
+          npx playwright install chromium --with-deps
+
+      - name: Run 50 browser checks and post report
+        env:
+          CONTROL_URL: ${{ needs.parse-issue.outputs.control_url }}
+          VARIATIONS:  ${{ needs.parse-issue.outputs.variations }}
+          COMMENT_ID:  ${{ needs.parse-issue.outputs.comment_id }}
+          REPO:        ${{ inputs.repository }}
         run: |
           set -euo pipefail
 
           node - << 'SCRIPT'
-          const https = require('https');
-          const http  = require('http');
-          const fs    = require('fs');
-          const { execSync } = require('child_process');
+          const { chromium } = require('playwright');
+          const fs = require('fs');
 
-          const controlUrl     = process.env.CONTROL_URL || '';
-          const variationsRaw  = process.env.VARIATIONS  || '[]';
-          const commentId      = process.env.COMMENT_ID;
-          const repo           = process.env.REPO;
+          const controlUrl    = process.env.CONTROL_URL || '';
+          const variationsRaw = process.env.VARIATIONS  || '[]';
+          const commentId     = process.env.COMMENT_ID;
+          const repo          = process.env.REPO;
 
           let variations = [];
           try { variations = JSON.parse(variationsRaw); } catch(e) {}
 
           const TOTAL       = 50;
-          const CONCURRENCY = 10;
+          const CONCURRENCY = 5;
 
           function getPath(url) {
             try {
@@ -91,80 +95,84 @@ jobs:
             } catch(e) { return url; }
           }
 
-          function checkRedirect(url) {
-            return new Promise((resolve) => {
-              const mod = url.startsWith('https') ? https : http;
-              try {
-                const req = mod.get(url, {
-                  headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SplitTestChecker/1.0)' },
-                }, (res) => {
-                  resolve(res.headers.location || '');
-                  res.resume();
-                });
-                req.setTimeout(15000, () => { req.destroy(); resolve(''); });
-                req.on('error', () => resolve(''));
-              } catch(e) { resolve(''); }
-            });
+          async function checkFinalUrl(browser, url) {
+            const context = await browser.newContext();
+            const page    = await context.newPage();
+            try {
+              await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+              return page.url();
+            } catch(e) {
+              console.log(`Request error: ${e.message}`);
+              return '';
+            } finally {
+              await context.close();
+            }
           }
 
           async function main() {
-            const results = [];
-            for (let i = 0; i < TOTAL; i += CONCURRENCY) {
-              const batch = Math.min(CONCURRENCY, TOTAL - i);
-              const batchResults = await Promise.all(
-                Array.from({ length: batch }, () => checkRedirect(controlUrl))
-              );
-              results.push(...batchResults);
-              console.log(`[${Math.min(i + CONCURRENCY, TOTAL)}/${TOTAL}] requests completed`);
-            }
-
-            const controlPath = getPath(controlUrl);
-            const counts      = new Map(variations.map(v => [v.url, 0]));
-            let controlCount  = 0;
-            let unknownCount  = 0;
-
-            for (const location of results) {
-              if (!location) { controlCount++; continue; }
-
-              let matched = false;
-              for (const v of variations) {
-                if (getPath(location) === getPath(v.url)) {
-                  counts.set(v.url, (counts.get(v.url) || 0) + 1);
-                  matched = true;
-                  break;
-                }
+            const browser = await chromium.launch({ headless: true });
+            try {
+              const results = [];
+              for (let i = 0; i < TOTAL; i += CONCURRENCY) {
+                const batch = Math.min(CONCURRENCY, TOTAL - i);
+                const batchResults = await Promise.all(
+                  Array.from({ length: batch }, () => checkFinalUrl(browser, controlUrl))
+                );
+                results.push(...batchResults);
+                console.log(`[${Math.min(i + CONCURRENCY, TOTAL)}/${TOTAL}] checks completed`);
               }
-              if (!matched) {
-                if (getPath(location) === controlPath) {
+
+              const controlPath = getPath(controlUrl);
+              const counts      = new Map(variations.map(v => [v.url, 0]));
+              let controlCount  = 0;
+              let unknownCount  = 0;
+
+              for (const finalUrl of results) {
+                if (!finalUrl) { controlCount++; continue; }
+
+                if (getPath(finalUrl) === controlPath) {
                   controlCount++;
-                } else {
+                  continue;
+                }
+
+                let matched = false;
+                for (const v of variations) {
+                  if (getPath(finalUrl) === getPath(v.url)) {
+                    counts.set(v.url, (counts.get(v.url) || 0) + 1);
+                    matched = true;
+                    break;
+                  }
+                }
+                if (!matched) {
                   unknownCount++;
-                  console.log(`Unmatched redirect: ${location}`);
+                  console.log(`Unmatched: ${finalUrl}`);
                 }
               }
-            }
 
-            const rows = ['| Version | Redirects |', '|:---|:---:|'];
-            rows.push(`| ${controlUrl} | ${controlCount} |`);
-            for (const v of variations) {
-              rows.push(`| ${v.url} | ${counts.get(v.url) || 0} |`);
-            }
-            if (unknownCount > 0) {
-              rows.push(`| ⚠️ Other / unmatched | ${unknownCount} |`);
-            }
+              const rows = ['| Version | Redirects |', '|:---|:---:|'];
+              rows.push(`| ${controlUrl} | ${controlCount} |`);
+              for (const v of variations) {
+                rows.push(`| ${v.url} | ${counts.get(v.url) || 0} |`);
+              }
+              if (unknownCount > 0) {
+                rows.push(`| ⚠️ Other / unmatched | ${unknownCount} |`);
+              }
 
-            const report = [
-              '### Split Test Check Results',
-              '',
-              `**Control:** ${controlUrl}`,
-              '',
-              rows.join('\n'),
-              '',
-              `_${TOTAL} total requests_`,
-            ].join('\n');
+              const report = [
+                '### Split Test Check Results',
+                '',
+                `**Control:** ${controlUrl}`,
+                '',
+                rows.join('\n'),
+                '',
+                `_${TOTAL} total requests_`,
+              ].join('\n');
 
-            fs.writeFileSync('/tmp/check_report.md', report);
-            console.log('\n--- Report ---\n' + report);
+              fs.writeFileSync('/tmp/check_report.md', report);
+              console.log('\n--- Report ---\n' + report);
+            } finally {
+              await browser.close();
+            }
           }
 
           main().catch(err => { console.error(err); process.exit(1); });
