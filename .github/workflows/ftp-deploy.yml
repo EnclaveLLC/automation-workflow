@@ -182,9 +182,17 @@ jobs:
           repository: EnclaveLLC/automation-workflow
           path: EnclaveLLC/automation-workflow
 
+      - name: Get changed HTML/PHP files
+        id: changedfiles
+        run: |
+          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha || github.event.before }} ${{ github.event.pull_request.merge_commit_sha || github.sha }} \
+            | grep -E '\.(html|php)$' | tr '\n' ' ' || true)
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+
       - name: Replace <img> src using Node
         env:
           REPO_NAME: ${{ github.event.repository.name }}
+          CHANGED_FILES: ${{ steps.changedfiles.outputs.files }}
         run: node EnclaveLLC/automation-workflow/scripts/ftp_deploy/replace-img.js
 
       # ---------------------------------------------------------

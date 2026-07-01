@@ -27,7 +27,12 @@ function getFiles(dir) {
   return results;
 }
 
-const files = getFiles(".");
+let files;
+if (process.env.CHANGED_FILES && process.env.CHANGED_FILES.trim()) {
+  files = process.env.CHANGED_FILES.trim().split(/\s+/).filter(f => fs.existsSync(f));
+} else {
+  files = getFiles(".");
+}
 
 files.forEach(file => {
   let content = fs.readFileSync(file, "utf8");
