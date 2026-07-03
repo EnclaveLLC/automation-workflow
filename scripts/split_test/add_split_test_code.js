@@ -25,7 +25,6 @@ if (!fs.existsSync(indexFile)) {
 }
 
 const urlEntries = [
-  '"' + controlUrl + '$qs"',
   ...variations.map(v => '"' + v.url + '$qs"'),
 ].map(e => '    ' + e).join(',\n');
 
