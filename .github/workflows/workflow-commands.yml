@@ -16,7 +16,7 @@ on:
 jobs:
   restart:
     name: Restart Workflow
-    if: contains(inputs.comment_body, '@restart')
+    if: contains(inputs.comment_body, '/restart')
     uses: ./.github/workflows/restart.yml
     with:
       issue_number: ${{ inputs.issue_number }}
