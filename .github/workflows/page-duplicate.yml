@@ -186,7 +186,7 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/${{ needs.parse-issue.outputs.ref_host }}
           path: ref-repo
-          token: ${{ secrets.CROSS_REPO_TOKEN }}
+          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
 
       # ── Duplicate folder ─────────────────────────────────────────────────────
       - name: Debug paths
