@@ -10,6 +10,9 @@ on:
     secrets:
       NOTION_TOKEN:
         required: false
+      CROSS_REPO_TOKEN:
+        description: "PAT with read access to sibling repos; required only when the reference page lives in a different repo than the new page"
+        required: false
 
 jobs:
   # ── Job 1: Parse issue body ─────────────────────────────────────────────────
@@ -23,6 +26,8 @@ jobs:
     outputs:
       ref_path:        ${{ steps.parse.outputs.ref_path }}
       duplicate_path:  ${{ steps.parse.outputs.duplicate_path }}
+      ref_host:        ${{ steps.parse.outputs.ref_host }}
+      new_host:        ${{ steps.parse.outputs.new_host }}
       cta_links:       ${{ steps.parse.outputs.cta_links }}
       gtmetrix_urls:   ${{ steps.parse.outputs.gtmetrix_urls }}
       replace_mapping: ${{ steps.parse.outputs.replace_mapping }}
@@ -174,6 +179,15 @@ jobs:
           path: EnclaveLLC/automation-workflow
           token: ${{ github.token }}
 
+      # ── Checkout reference repository (only when it differs from this repo) ──
+      - name: Checkout reference repository
+        if: needs.parse-issue.outputs.ref_host != needs.parse-issue.outputs.new_host
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/${{ needs.parse-issue.outputs.ref_host }}
+          path: ref-repo
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+
       # ── Duplicate folder ─────────────────────────────────────────────────────
       - name: Debug paths
         run: |
@@ -186,12 +200,23 @@ jobs:
         env:
           REF_PATH:       ${{ needs.parse-issue.outputs.ref_path }}
           DUPLICATE_PATH: ${{ needs.parse-issue.outputs.duplicate_path }}
+          REF_HOST:       ${{ needs.parse-issue.outputs.ref_host }}
+          NEW_HOST:       ${{ needs.parse-issue.outputs.new_host }}
         run: |
           set -euo pipefail
           REF_PATH="${REF_PATH#/}"
           DUPLICATE_PATH="${DUPLICATE_PATH#/}"
+          if [ "$REF_HOST" != "$NEW_HOST" ]; then
+            SOURCE_DIR="ref-repo/$REF_PATH"
+          else
+            SOURCE_DIR="$REF_PATH"
+          fi
+          if [ ! -d "$SOURCE_DIR" ]; then
+            echo "ERROR: Reference path '$SOURCE_DIR' not found (reference repo: $REF_HOST)."
+            exit 1
+          fi
           mkdir -p "$DUPLICATE_PATH"
-          cp -R "$REF_PATH/." "$DUPLICATE_PATH"
+          cp -R "$SOURCE_DIR/." "$DUPLICATE_PATH"
           echo "duplicate_path=$DUPLICATE_PATH" >> "$GITHUB_OUTPUT"
 
       # ── Detect index file ────────────────────────────────────────────────────

@@ -98,6 +98,12 @@ const gtmetrix_urls = `${ref_url}\n${new_url}`;
 const ref_path = new URL(ref_url).pathname.replace(/^\//, '');
 const duplicate_path = new URL(new_url).pathname.replace(/^\//, '');
 
+// Hostnames double as repo names (e.g. senecahealthads.com), which lets the
+// workflow detect when the reference page lives in a different repo than
+// the one the new page is being created in.
+const ref_host = new URL(ref_url).hostname.replace(/^www\./, '');
+const new_host = new URL(new_url).hostname.replace(/^www\./, '');
+
 // Format: '1 pack' => url
 const ctaFormatted = cta_links
   .map(({ label, url }) => `'${label.toLowerCase()}' => ${url}`)
@@ -109,6 +115,8 @@ const out = [
   `new_url=${new_url}`,
   `ref_path=${ref_path}`,
   `duplicate_path=${duplicate_path}`,
+  `ref_host=${ref_host}`,
+  `new_host=${new_host}`,
   'gtmetrix_urls<<GTEOF',
   gtmetrix_urls,
   'GTEOF',
@@ -127,6 +135,8 @@ console.log(`ref_url:         ${ref_url}`);
 console.log(`new_url:         ${new_url}`);
 console.log(`ref_path:        ${ref_path}`);
 console.log(`duplicate_path:  ${duplicate_path}`);
+console.log(`ref_host:        ${ref_host}`);
+console.log(`new_host:        ${new_host}`);
 console.log(`gtmetrix_urls:\n${gtmetrix_urls}`);
 console.log(`cta_links:\n${ctaFormatted}`);
 console.log(`replace_mapping: ${JSON.stringify(replace_mapping)}`);
