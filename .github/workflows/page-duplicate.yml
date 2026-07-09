@@ -102,6 +102,10 @@ jobs:
           COMMENT_ID:     ${{ needs.parse-issue.outputs.comment_id }}
         run: |
           DUPLICATE_PATH="${DUPLICATE_PATH#/}"
+          if [ -z "$DUPLICATE_PATH" ]; then
+            echo "New Page targets the domain root; skipping existence check."
+            exit 0
+          fi
           if [ -e "$DUPLICATE_PATH" ]; then
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
@@ -220,6 +224,9 @@ jobs:
           set -euo pipefail
           REF_PATH="${REF_PATH#/}"
           DUPLICATE_PATH="${DUPLICATE_PATH#/}"
+          # Empty path means the URL had no path component, i.e. the domain root.
+          REF_PATH="${REF_PATH:-.}"
+          DUPLICATE_PATH="${DUPLICATE_PATH:-.}"
           if [ "$REF_HOST" != "$NEW_HOST" ]; then
             SOURCE_DIR="ref-repo/$REF_PATH"
           else
