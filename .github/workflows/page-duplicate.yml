@@ -10,8 +10,11 @@ on:
     secrets:
       NOTION_TOKEN:
         required: false
-      CROSS_REPO_TOKEN:
-        description: "PAT with read access to sibling repos; required only when the reference page lives in a different repo than the new page"
+      CROSS_REPO_APP_ID:
+        description: "App ID of the GitHub App used to read sibling repos; required only when the reference page lives in a different repo than the new page"
+        required: false
+      CROSS_REPO_APP_PRIVATE_KEY:
+        description: "Private key (PEM) of the GitHub App used to read sibling repos; required only when the reference page lives in a different repo than the new page"
         required: false
 
 jobs:
@@ -179,6 +182,17 @@ jobs:
           path: EnclaveLLC/automation-workflow
           token: ${{ github.token }}
 
+      # ── Generate a short-lived token to read the reference repository ────────
+      - name: Generate cross-repo access token
+        id: app-token
+        if: needs.parse-issue.outputs.ref_host != needs.parse-issue.outputs.new_host
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id:      ${{ secrets.CROSS_REPO_APP_ID }}
+          private-key: ${{ secrets.CROSS_REPO_APP_PRIVATE_KEY }}
+          owner:       ${{ github.repository_owner }}
+          repositories: ${{ needs.parse-issue.outputs.ref_host }}
+
       # ── Checkout reference repository (only when it differs from this repo) ──
       - name: Checkout reference repository
         if: needs.parse-issue.outputs.ref_host != needs.parse-issue.outputs.new_host
@@ -186,7 +200,7 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/${{ needs.parse-issue.outputs.ref_host }}
           path: ref-repo
-          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+          token: ${{ steps.app-token.outputs.token }}
 
       # ── Duplicate folder ─────────────────────────────────────────────────────
       - name: Debug paths
