@@ -111,12 +111,14 @@ async function run() {
       const report = await request("GET", `/api/2.0/reports/${reportId}`);
 
       const attrs = report.data.attributes;
+      const reportUrl = report.data.links?.report_url;
 
       console.log("");
       console.log("GTMETRIX RESULTS");
       console.log(`Grade: ${attrs.gtmetrix_grade}`);
       console.log(`Performance: ${attrs.performance_score}`);
       console.log(`Structure: ${attrs.structure_score}`);
+      console.log(`Report: ${reportUrl}`);
 
       const today = new Date().toISOString().slice(0, 10);
 
@@ -125,7 +127,8 @@ async function run() {
         date: today,
         grade: attrs.gtmetrix_grade,
         performance: attrs.performance_score,
-        structure: attrs.structure_score
+        structure: attrs.structure_score,
+        report_url: reportUrl
       }));
 
       if (attrs.performance_score < 90) {

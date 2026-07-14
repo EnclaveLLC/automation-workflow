@@ -170,16 +170,17 @@ jobs:
             const badge = badgeMap[row.status] || badgeMap.waiting;
             const result = completedResults[row.url];
             if ((row.status === 'completed' || row.status === 'aborted') && result) {
-              return `| ${row.url} | <img src="${badge}" width="120" data-linear-height="20"> | ${result.grade} | ${result.performance}% | ${result.structure}% |`;
+              const report = result.report_url ? `[View](${result.report_url})` : '-';
+              return `| ${row.url} | <img src="${badge}" width="120" data-linear-height="20"> | ${result.grade} | ${result.performance}% | ${result.structure}% | ${report} |`;
             }
-            return `| ${row.url} | <img src="${badge}" width="120" data-linear-height="20"> | - | - | - |`;
+            return `| ${row.url} | <img src="${badge}" width="120" data-linear-height="20"> | - | - | - | - |`;
           });
           const table = [
             '---',
             '### GTmetrix Performance Test:',
-            '<!-- linear:table-colwidths:298,130,65,111,95 -->',
-            '| URL | Status | Grade | Performance | Structure |',
-            '|:---|:---|:---:|:---:|:---:|',
+            '<!-- linear:table-colwidths:298,130,65,111,95,90 -->',
+            '| URL | Status | Grade | Performance | Structure | Report |',
+            '|:---|:---|:---:|:---:|:---:|:---:|',
             ...rows,
           ].join('\n');
           const abortedUrls = (process.env.ABORTED_URLS_LIST || '').split('\n').filter(Boolean);
@@ -395,25 +396,27 @@ jobs:
             resultsByUrl[r.url] = r;
           }
           for (const r of results.filter(r => !r.aborted)) {
-            rows.push(`| ${r.url} | <img src="${process.env.BADGE_COMPLETED}" width="120" data-linear-height="20"> | ${r.grade} | ${r.performance}% | ${r.structure}% |`);
+            const report = r.report_url ? `[View](${r.report_url})` : '-';
+            rows.push(`| ${r.url} | <img src="${process.env.BADGE_COMPLETED}" width="120" data-linear-height="20"> | ${r.grade} | ${r.performance}% | ${r.structure}% | ${report} |`);
           }
           for (const url of abortedUrls) {
             const r = resultsByUrl[url];
             if (r) {
-              rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120" data-linear-height="20"> | ${r.grade} | ${r.performance}% | ${r.structure}% |`);
+              const report = r.report_url ? `[View](${r.report_url})` : '-';
+              rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120" data-linear-height="20"> | ${r.grade} | ${r.performance}% | ${r.structure}% | ${report} |`);
             } else {
-              rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120" data-linear-height="20"> | - | - | - |`);
+              rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120" data-linear-height="20"> | - | - | - | - |`);
             }
           }
           for (const url of failedUrls) {
-            rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120" data-linear-height="20"> | - | - | - |`);
+            rows.push(`| ${url} | <img src="${process.env.BADGE_ABORTED}" width="120" data-linear-height="20"> | - | - | - | - |`);
           }
           let output = [
             '---',
             '### GTmetrix Performance Test:',
-            '<!-- linear:table-colwidths:298,130,65,111,95 -->',
-            '| URL | Status | Grade | Performance | Structure |',
-            '|:---|:---|:---:|:---:|:---:|',
+            '<!-- linear:table-colwidths:298,130,65,111,95,90 -->',
+            '| URL | Status | Grade | Performance | Structure | Report |',
+            '|:---|:---|:---:|:---:|:---:|:---:|',
             ...rows,
           ].join('\n');
           if (abortedUrls.length) {
