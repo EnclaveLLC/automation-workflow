@@ -414,7 +414,7 @@ jobs:
           let output = [
             '---',
             '### GTmetrix Performance Test:',
-            '<!-- linear:table-colwidths:298,130,65,111,95,90 -->',
+            '<!-- linear:table-colwidths:268,130,65,111,95,90 -->',
             '| URL | Status | Grade | Performance | Structure | Report |',
             '|:---|:---|:---:|:---:|:---:|:---:|',
             ...rows,

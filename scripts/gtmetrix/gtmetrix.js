@@ -2,6 +2,7 @@ const https = require("https");
 
 const API_KEY = process.env.GTMETRIX_API_KEY;
 const URL = process.argv[2];
+const LOCATION_NAME = "Danville";
 
 if (!URL) {
   console.error("Usage: node gtmetrix.js <url>");
@@ -54,9 +55,28 @@ async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+async function getLocationId(name) {
+  const locations = await request("GET", "/api/2.0/locations");
+  const match = locations?.data?.find(
+    loc => loc.attributes?.name?.toLowerCase().includes(name.toLowerCase())
+  );
+
+  if (!match) {
+    console.error(`Could not find GTmetrix location matching "${name}"`);
+    console.error(JSON.stringify(locations, null, 2));
+    process.exit(1);
+  }
+
+  return match.id;
+}
+
 async function run() {
 
   console.log(`Starting GTmetrix test for ${URL}`);
+
+  const locationId = await getLocationId(LOCATION_NAME);
+
+  console.log(`Location: ${LOCATION_NAME} (${locationId})`);
 
   const create = await request(
     "POST",
@@ -67,7 +87,8 @@ async function run() {
         attributes: {
           url: URL,
           video: 0,
-          retention: 1
+          retention: 1,
+          location: locationId
         }
       }
     }
