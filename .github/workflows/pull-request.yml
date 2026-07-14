@@ -1,0 +1,181 @@
+name: Pull Request
+
+on:
+  workflow_call:
+    inputs:
+      issue_number:
+        required: true
+        type: number
+      repository:
+        required: true
+        type: string
+
+jobs:
+  # ── Job 1: Find the branch link posted in the issue comments ────────────────
+  parse-comment:
+    name: Find Branch Link
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      branch_name:     ${{ steps.find_branch.outputs.branch_name }}
+      page_url:        ${{ steps.parse_issue.outputs.page_url }}
+      comment_id:      ${{ steps.progress.outputs.comment_id }}
+      comment_updated: ${{ steps.find_branch.outputs.comment_updated }}
+
+    steps:
+      - name: Post progress comment
+        id: progress
+        run: |
+          COMMENT_ID=$(gh api repos/${{ inputs.repository }}/issues/${{ inputs.issue_number }}/comments \
+            -X POST \
+            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-loading.svg\" width=\"20\" height=\"20\" data-linear-height=\"20\"/> Pull request creation in progress" \
+            --jq '.id')
+          echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Find branch link in issue comments
+        id: find_branch
+        env:
+          REPO:         ${{ inputs.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          COMMENT_ID:   ${{ steps.progress.outputs.comment_id }}
+        run: |
+          set -euo pipefail
+          COMMENTS_JSON=$(gh api "repos/${REPO}/issues/${ISSUE_NUMBER}/comments")
+
+          BRANCH_NAME=$(COMMENTS_JSON="$COMMENTS_JSON" node -e "
+            const repo = process.env.REPO;
+            const comments = JSON.parse(process.env.COMMENTS_JSON);
+            const escaped = repo.replace(/[.*+?^\${}()|[\]\\\\]/g, '\\\\\$&');
+            const re = new RegExp('https://github\\\\.com/' + escaped + '/tree/([^\\\\s)]+)');
+            let branch = '';
+            for (const c of comments) {
+              const m = (c.body || '').match(re);
+              if (m) branch = m[1];
+            }
+            process.stdout.write(branch);
+          ")
+
+          if [ -z "$BRANCH_NAME" ]; then
+            gh api "repos/${REPO}/issues/comments/${COMMENT_ID}" \
+              -X PATCH \
+              -f body="$(printf '### Pull Request Creation Failed\n\nNo branch link was found on this issue.\n\nMake sure a branch has been created (e.g. via the New Page workflow) before commenting `/pr`.')"
+            echo "comment_updated=true" >> "$GITHUB_OUTPUT"
+            echo "ERROR: No branch link found in issue comments"
+            exit 1
+          fi
+
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+          echo "Found branch: $BRANCH_NAME"
+
+      - name: Parse issue body for page URL
+        id: parse_issue
+        env:
+          REPO:         ${{ inputs.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          ISSUE_BODY=$(gh api "repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body')
+          export ISSUE_BODY
+
+          PAGE_URL=$(node -e "
+            const body = process.env.ISSUE_BODY.split(/\nDev Notes/i)[0];
+            const m = body.match(/https?:\/\/[^\]\s>)]+/);
+            if (!m) { process.exit(0); }
+            process.stdout.write(m[0]);
+          ")
+
+          echo "page_url=$PAGE_URL" >> "$GITHUB_OUTPUT"
+          echo "Parsed page URL for GTmetrix: $PAGE_URL"
+
+  # ── Job 2: Create the pull request ──────────────────────────────────────────
+  create-pr:
+    name: Create Pull Request
+    needs: parse-comment
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN:     ${{ github.token }}
+      REPO:         ${{ inputs.repository }}
+      ISSUE_NUMBER: ${{ inputs.issue_number }}
+      BRANCH_NAME:  ${{ needs.parse-comment.outputs.branch_name }}
+      PAGE_URL:     ${{ needs.parse-comment.outputs.page_url }}
+      COMMENT_ID:   ${{ needs.parse-comment.outputs.comment_id }}
+
+    steps:
+      - name: Create pull request
+        id: create_pr
+        run: |
+          set -euo pipefail
+          DEFAULT_BRANCH=$(gh api "repos/${REPO}" --jq '.default_branch')
+          ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title --jq '.title')
+
+          cat > /tmp/pr_body.md << EOF
+          ### Summary:
+          - Branch ready for review
+
+          ### GTMetrix Test URLs
+          ${PAGE_URL}
+
+          ### Issue
+          https://github.com/${REPO}/issues/${ISSUE_NUMBER}
+          EOF
+
+          PR_URL=$(gh pr create \
+            --repo "$REPO" \
+            --base "$DEFAULT_BRANCH" \
+            --head "$BRANCH_NAME" \
+            --title "$ISSUE_TITLE" \
+            --body-file /tmp/pr_body.md)
+
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo "Created PR: $PR_URL"
+
+      - name: Comment PR link on issue
+        env:
+          PR_URL: ${{ steps.create_pr.outputs.pr_url }}
+        run: |
+          set -euo pipefail
+
+          cat > /tmp/issue_comment.md << CMEOF
+          ### Summary:
+          - Pull request created
+
+          The pull request is ready to review:
+          ${PR_URL}
+          CMEOF
+
+          gh api "repos/${REPO}/issues/comments/${COMMENT_ID}" \
+            -X PATCH \
+            -f body="$(cat /tmp/issue_comment.md)"
+
+  # ── Job: Handle failure ──────────────────────────────────────────────────────
+  handle-failure:
+    name: Handle Failure
+    needs: [parse-comment, create-pr]
+    runs-on: ubuntu-latest
+    if: >-
+      failure() &&
+      needs.parse-comment.outputs.comment_updated != 'true'
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Update comment with failure message
+        env:
+          COMMENT_ID: ${{ needs.parse-comment.outputs.comment_id }}
+        run: |
+          if [ -z "$COMMENT_ID" ]; then
+            echo "No comment ID, skipping"
+            exit 0
+          fi
+          gh api "repos/${{ inputs.repository }}/issues/comments/${COMMENT_ID}" \
+            -X PATCH \
+            -f body="$(printf '### Pull Request Creation Failed\n\nAn error occurred. Please check the [workflow run](%s/%s/actions/runs/%s) for details.' \
+              "${{ github.server_url }}" "${{ inputs.repository }}" "${{ github.run_id }}")"

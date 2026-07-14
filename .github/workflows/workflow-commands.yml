@@ -38,3 +38,16 @@ jobs:
     secrets: inherit
     permissions:
       issues: write
+
+  pull-request:
+    name: Pull Request
+    if: contains(inputs.comment_body, '/pr')
+    uses: ./.github/workflows/pull-request.yml
+    with:
+      issue_number: ${{ inputs.issue_number }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
