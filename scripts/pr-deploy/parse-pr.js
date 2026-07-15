@@ -27,6 +27,26 @@ function extractSection(headerRe) {
   return urls;
 }
 
+function extractIssueUrl() {
+  let inSection = false;
+  for (const line of lines) {
+    if (/^#{1,6}\s+issue\s*$/.test(line.toLowerCase().trim())) {
+      inSection = true;
+      continue;
+    }
+    if (inSection) {
+      if (/^#{1,6}\s/.test(line.trim())) break;
+      const urlMatch = line.match(/https?:\/\/\S+/);
+      if (urlMatch) return urlMatch[0];
+      const shortMatch = line.trim().match(/^#(\d+)$/);
+      if (shortMatch && process.env.REPO) {
+        return `https://github.com/${process.env.REPO}/issues/${shortMatch[1]}`;
+      }
+    }
+  }
+  return '';
+}
+
 function extractNotionField(fieldName) {
   let inSection = false;
   for (const line of lines) {
@@ -46,11 +66,11 @@ function extractNotionField(fieldName) {
 }
 
 const gtmetrixUrls = extractSection(/^#{1,6}\s+gtmetrix test urls?$/);
-const issueUrls    = extractSection(/^#{1,6}\s+issue\s*$/);
+const issueUrl     = extractIssueUrl();
 const gtm          = extractNotionField('GTM');
 
 const result = {
-  issueUrl: issueUrls[0] || '',
+  issueUrl,
   gtmetrixUrls,
   gtm,
 };

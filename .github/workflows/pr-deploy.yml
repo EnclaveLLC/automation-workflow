@@ -207,6 +207,7 @@ jobs:
         id: extract
         env:
           PR_BODY: ${{ inputs.pr_body }}
+          REPO:    ${{ github.repository }}
         run: |
           node .aw/scripts/pr-deploy/parse-pr.js
 
