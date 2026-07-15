@@ -207,7 +207,7 @@ jobs:
 
           if [ "$ALREADY_EXISTS" = "true" ]; then
             cat > /tmp/issue_comment.md << CMEOF
-          Branch already exists. Skipping creation.
+          The branch already exists. Delete the existing branch first before creating a new one. Skipping branch creation.
 
           ${BRANCH_URL}
           CMEOF
