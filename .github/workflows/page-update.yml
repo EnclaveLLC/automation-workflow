@@ -20,6 +20,7 @@ jobs:
     outputs:
       page_url:        ${{ steps.parse.outputs.page_url }}
       page_path:       ${{ steps.parse.outputs.page_path }}
+      linear_id:       ${{ steps.parse.outputs.linear_id }}
       comment_id:      ${{ steps.progress_comment.outputs.comment_id }}
       comment_updated: ${{ steps.parse.outputs.comment_updated }}
 
@@ -66,6 +67,14 @@ jobs:
           echo "page_path=$PAGE_PATH" >> "$GITHUB_OUTPUT"
           echo "Parsed URL:  $PAGE_URL"
           echo "Parsed path: $PAGE_PATH"
+
+          LINEAR_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
+            --jq '[.[] | select(.user.login | test("linear"; "i")) | .body | match("[A-Z]+-[0-9]+").string] | first // ""' \
+            2>/dev/null || echo "")
+          if [ -n "$LINEAR_ID" ]; then
+            echo "linear_id=$LINEAR_ID" >> "$GITHUB_OUTPUT"
+            echo "linear_id: $LINEAR_ID"
+          fi
 
   # ── Job 2: Check path already exists ────────────────────────────────────────
   check-path:
@@ -117,6 +126,7 @@ jobs:
       GH_TOKEN:   ${{ github.token }}
       PAGE_PATH:  ${{ needs.parse-issue.outputs.page_path }}
       PAGE_URL:   ${{ needs.parse-issue.outputs.page_url }}
+      LINEAR_ID:  ${{ needs.parse-issue.outputs.linear_id }}
       COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
     outputs:
       comment_updated: ${{ steps.verify_branch.outputs.comment_updated }}
@@ -135,7 +145,11 @@ jobs:
       - name: Set branch name
         run: |
           PAGE_SLUG=$(basename "${PAGE_PATH%/}")
-          echo "BRANCH_NAME=page-update/${PAGE_SLUG}" >> "$GITHUB_ENV"
+          if [ -n "$LINEAR_ID" ]; then
+            echo "BRANCH_NAME=page-update/${LINEAR_ID}-${PAGE_SLUG}" >> "$GITHUB_ENV"
+          else
+            echo "BRANCH_NAME=page-update/${PAGE_SLUG}" >> "$GITHUB_ENV"
+          fi
 
       - name: Check for existing branch
         id: verify_branch
