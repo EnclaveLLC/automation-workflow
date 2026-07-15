@@ -23,6 +23,7 @@ jobs:
       branch_name:     ${{ steps.find_branch.outputs.branch_name }}
       page_url:        ${{ steps.parse_issue.outputs.page_url }}
       action_line:     ${{ steps.label.outputs.action_line }}
+      linear_id:       ${{ steps.linear.outputs.linear_id }}
       comment_id:      ${{ steps.progress.outputs.comment_id }}
       comment_updated: ${{ steps.find_branch.outputs.comment_updated }}
 
@@ -119,6 +120,21 @@ jobs:
             echo "action_line=New Page" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Extract Linear ID
+        id: linear
+        env:
+          REPO:         ${{ inputs.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          LINEAR_ID=$(gh api "repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
+            --jq '[.[] | select(.user.login | test("linear"; "i")) | .body | match("[A-Z]+-[0-9]+").string] | first // ""' \
+            2>/dev/null || echo "")
+          if [ -n "$LINEAR_ID" ]; then
+            echo "linear_id=$LINEAR_ID" >> "$GITHUB_OUTPUT"
+            echo "linear_id: $LINEAR_ID"
+          fi
+
   # ── Job 2: Create the pull request ──────────────────────────────────────────
   create-pr:
     name: Create Pull Request
@@ -135,6 +151,7 @@ jobs:
       BRANCH_NAME:  ${{ needs.parse-comment.outputs.branch_name }}
       PAGE_URL:     ${{ needs.parse-comment.outputs.page_url }}
       ACTION_LINE:  ${{ needs.parse-comment.outputs.action_line }}
+      LINEAR_ID:    ${{ needs.parse-comment.outputs.linear_id }}
       COMMENT_ID:   ${{ needs.parse-comment.outputs.comment_id }}
     outputs:
       comment_updated: ${{ steps.create_pr.outputs.comment_updated }}
@@ -153,6 +170,12 @@ jobs:
             process.stdout.write(path.basename(url.pathname.replace(/\/\$/, '')));
           ")
 
+          if [ -n "$LINEAR_ID" ]; then
+            RESOLVES_LINE="Resolves $LINEAR_ID"
+          else
+            RESOLVES_LINE=""
+          fi
+
           cat > /tmp/pr_body.md << EOF
           ### Summary:
           - ${ACTION_LINE} ${PAGE_NAME}
@@ -164,6 +187,8 @@ jobs:
 
           ### Issue
           #${ISSUE_NUMBER}
+          
+          ${RESOLVES_LINE}
           EOF
 
           set +e
@@ -191,17 +216,21 @@ jobs:
 
           PR_URL="$PR_OUTPUT"
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo "page_name=$PAGE_NAME" >> "$GITHUB_OUTPUT"
           echo "Created PR: $PR_URL"
 
       - name: Comment PR link on issue
         env:
-          PR_URL: ${{ steps.create_pr.outputs.pr_url }}
+          PR_URL:    ${{ steps.create_pr.outputs.pr_url }}
+          PAGE_NAME: ${{ steps.create_pr.outputs.page_name }}
         run: |
           set -euo pipefail
 
           cat > /tmp/issue_comment.md << CMEOF
           ### Summary:
-          - Pull request created
+          - ${ACTION_LINE} ${PAGE_NAME}
+          - Created branch: ${BRANCH_NAME}
+          - Created pull request
 
           The pull request is ready to review:
           ${PR_URL}
