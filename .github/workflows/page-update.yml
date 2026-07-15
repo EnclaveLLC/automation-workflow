@@ -1,4 +1,4 @@
-name: New Page
+name: Page Update
 
 on:
   workflow_call:
@@ -24,12 +24,12 @@ jobs:
       comment_updated: ${{ steps.parse.outputs.comment_updated }}
 
     steps:
-      - name: Comment new page creation in progress
+      - name: Comment page update in progress
         id: progress_comment
         run: |
           COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
             -X POST \
-            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-loading.svg\" width=\"20\" height=\"20\" data-linear-height=\"20\"/> New page creation in progress" \
+            -f body="<img src=\"https://raw.githubusercontent.com/EnclaveLLC/automation-workflow/main/images/badges-loading.svg\" width=\"20\" height=\"20\" data-linear-height=\"20\"/> Page update in progress" \
             --jq '.id')
           echo "comment_id=$COMMENT_ID" >> "$GITHUB_OUTPUT"
 
@@ -50,7 +50,7 @@ jobs:
           if [ -z "$PAGE_URL" ]; then
             gh api repos/${{ github.repository }}/issues/comments/$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments --jq '.[-1].id') \
               -X PATCH \
-              -f body="$(printf '### New Page Creation Failed\n\nNo URL found in the issue body.\n\nPlease follow the issue format and include a valid page URL.')"
+              -f body="$(printf '### Page Update Failed\n\nNo URL found in the issue body.\n\nPlease follow the issue format and include a valid page URL.')"
             echo "comment_updated=true" >> "$GITHUB_OUTPUT"
             echo "ERROR: No URL found in issue body"
             exit 1
@@ -67,7 +67,7 @@ jobs:
           echo "Parsed URL:  $PAGE_URL"
           echo "Parsed path: $PAGE_PATH"
 
-  # ── Job 2: Check path does not already exist ────────────────────────────────
+  # ── Job 2: Check path already exists ────────────────────────────────────────
   check-path:
     name: Check Path Availability
     needs: parse-issue
@@ -90,24 +90,24 @@ jobs:
           fetch-depth: 1
           token: ${{ github.token }}
 
-      - name: Check page does not already exist
+      - name: Check page already exists
         id: check_exists
         run: |
           set -euo pipefail
           CLEAN_PATH="${PAGE_PATH#/}"
-          if [ -e "$CLEAN_PATH" ]; then
+          if [ ! -e "$CLEAN_PATH" ]; then
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
-              -f body="$(printf '### New Page Creation Failed\n\nThe following path already exists in the repository:\n\n❌ %s\n\nPlease choose a different path.' "$CLEAN_PATH")"
+              -f body="$(printf '### Page Update Failed\n\nThe following path does not exist in the repository:\n\n❌ %s\n\nPlease check the page URL and try again.' "$CLEAN_PATH")"
             echo "comment_updated=true" >> "$GITHUB_OUTPUT"
-            echo "ERROR: '$CLEAN_PATH' already exists."
+            echo "ERROR: '$CLEAN_PATH' does not exist."
             exit 1
           fi
-          echo "✅ Path '$CLEAN_PATH' is available."
+          echo "✅ Path '$CLEAN_PATH' exists."
 
-  # ── Job 3: Create new page ──────────────────────────────────────────────────
-  create-page:
-    name: Create New Page
+  # ── Job 3: Create update branch ─────────────────────────────────────────────
+  create-branch:
+    name: Create Update Branch
     needs: [parse-issue, check-path]
     runs-on: ubuntu-latest
     permissions:
@@ -135,7 +135,7 @@ jobs:
       - name: Set branch name
         run: |
           PAGE_SLUG=$(basename "${PAGE_PATH%/}")
-          echo "BRANCH_NAME=new-page:${PAGE_SLUG}" >> "$GITHUB_ENV"
+          echo "BRANCH_NAME=page-update:${PAGE_SLUG}" >> "$GITHUB_ENV"
 
       - name: Check for existing branch
         id: verify_branch
@@ -154,43 +154,6 @@ jobs:
         run: |
           set -euo pipefail
           git checkout -b "$BRANCH_NAME"
-
-      - name: Create page folder and index.html
-        if: steps.verify_branch.outputs.already_exists != 'true'
-        run: |
-          set -euo pipefail
-          PAGE_PATH="${PAGE_PATH#/}"
-          mkdir -p "$PAGE_PATH"
-
-          printf '%s\n' \
-            '<!DOCTYPE html>' \
-            '<html lang="en">' \
-            '<head>' \
-            '  <meta charset="UTF-8" />' \
-            '  <meta name="viewport" content="width=device-width, initial-scale=1.0" />' \
-            '  <meta name="robots" content="noindex, nofollow" />' \
-            '  <title>New Page</title>' \
-            '</head>' \
-            '<body>' \
-            '' \
-            '</body>' \
-            '</html>' \
-            > "$PAGE_PATH/index.html"
-
-          echo "✅ Created $PAGE_PATH/index.html"
-
-      - name: Configure git identity
-        if: steps.verify_branch.outputs.already_exists != 'true'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Commit changes
-        if: steps.verify_branch.outputs.already_exists != 'true'
-        run: |
-          set -euo pipefail
-          git add .
-          git commit -m "${{ github.event.issue.title }}"
 
       - name: Push branch
         if: steps.verify_branch.outputs.already_exists != 'true'
@@ -214,10 +177,9 @@ jobs:
           else
             cat > /tmp/issue_comment.md << CMEOF
           ### Summary:
-          - New page created
           - Branch created
 
-          The page branch is ready. Comment \`/pr\` on this issue to generate a pull request:
+          The update branch is ready. Comment \`/pr\` on this issue to generate a pull request:
           ${BRANCH_URL}
           CMEOF
           fi
@@ -229,13 +191,13 @@ jobs:
   # ── Job: Update comment on any failure ─────────────────────────────────────
   handle-failure:
     name: Handle Failure
-    needs: [parse-issue, check-path, create-page]
+    needs: [parse-issue, check-path, create-branch]
     runs-on: ubuntu-latest
     if: >-
       failure() &&
       needs.parse-issue.outputs.comment_updated != 'true' &&
       needs.check-path.outputs.comment_updated != 'true' &&
-      needs.create-page.outputs.comment_updated != 'true'
+      needs.create-branch.outputs.comment_updated != 'true'
     permissions:
       issues: write
     env:
@@ -251,4 +213,4 @@ jobs:
           fi
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$(printf '### New Page Creation Failed\n\nAn error occurred. Please check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.')"
+            -f body="$(printf '### Page Update Failed\n\nAn error occurred. Please check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.')"

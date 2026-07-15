@@ -42,6 +42,17 @@ jobs:
             issues: write
             pull-requests: write
 
+    page-update:
+        if: inputs.label_name == 'Page Update'
+        uses: ./.github/workflows/page-update.yml
+        with:
+            issue_number: ${{ inputs.issue_number }}
+        secrets: inherit
+        permissions:
+            contents: write
+            issues: write
+            pull-requests: write
+
     split-test-on:
         if: inputs.label_name == 'Split Test On'
         uses: ./.github/workflows/split-test.yml

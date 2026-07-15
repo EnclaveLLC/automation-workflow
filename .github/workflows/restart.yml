@@ -29,6 +29,7 @@ jobs:
             --jq '.labels[].name | select(
               . == "Page Duplicate" or
               . == "New Page" or
+              . == "Page Update" or
               . == "Split Test On" or
               . == "Split Test Off"
             )' | head -1)
