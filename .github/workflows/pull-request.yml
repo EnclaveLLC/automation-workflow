@@ -22,6 +22,7 @@ jobs:
     outputs:
       branch_name:     ${{ steps.find_branch.outputs.branch_name }}
       page_url:        ${{ steps.parse_issue.outputs.page_url }}
+      action_line:     ${{ steps.label.outputs.action_line }}
       comment_id:      ${{ steps.progress.outputs.comment_id }}
       comment_updated: ${{ steps.find_branch.outputs.comment_updated }}
 
@@ -90,6 +91,22 @@ jobs:
           echo "page_url=$PAGE_URL" >> "$GITHUB_OUTPUT"
           echo "Parsed page URL for GTmetrix: $PAGE_URL"
 
+      - name: Determine issue label
+        id: label
+        env:
+          REPO:         ${{ inputs.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          LABEL=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json labels \
+            --jq '.labels[].name | select(. == "Page Update")' | head -1)
+
+          if [ "$LABEL" = "Page Update" ]; then
+            echo "action_line=Updated" >> "$GITHUB_OUTPUT"
+          else
+            echo "action_line=New Page" >> "$GITHUB_OUTPUT"
+          fi
+
   # ── Job 2: Create the pull request ──────────────────────────────────────────
   create-pr:
     name: Create Pull Request
@@ -105,6 +122,7 @@ jobs:
       ISSUE_NUMBER: ${{ inputs.issue_number }}
       BRANCH_NAME:  ${{ needs.parse-comment.outputs.branch_name }}
       PAGE_URL:     ${{ needs.parse-comment.outputs.page_url }}
+      ACTION_LINE:  ${{ needs.parse-comment.outputs.action_line }}
       COMMENT_ID:   ${{ needs.parse-comment.outputs.comment_id }}
 
     steps:
@@ -115,15 +133,23 @@ jobs:
           DEFAULT_BRANCH=$(gh api "repos/${REPO}" --jq '.default_branch')
           ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title --jq '.title')
 
+          PAGE_NAME=$(PAGE_URL="$PAGE_URL" node -e "
+            const path = require('path');
+            const url = new URL(process.env.PAGE_URL);
+            process.stdout.write(path.basename(url.pathname.replace(/\/\$/, '')));
+          ")
+
           cat > /tmp/pr_body.md << EOF
           ### Summary:
-          - Branch ready for review
+          - ${ACTION_LINE} ${PAGE_NAME}
+          - Created branch: ${BRANCH_NAME}
+          - Created pull request
 
           ### GTMetrix Test URLs
           ${PAGE_URL}
 
           ### Issue
-          https://github.com/${REPO}/issues/${ISSUE_NUMBER}
+          #${ISSUE_NUMBER}
           EOF
 
           PR_URL=$(gh pr create \
