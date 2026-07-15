@@ -40,12 +40,26 @@ jobs:
           ISSUE_BODY=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }} --jq '.body')
           export ISSUE_BODY
 
-          # Ignore "Dev Notes" and anything after it; stop at ] to avoid capturing link targets
+          # Only look inside the issue's markdown table (e.g. "Page Update" column);
+          # ignores URLs that may appear elsewhere, like in Dev Notes.
           PAGE_URL=$(node -e "
-            const body = process.env.ISSUE_BODY.split(/\nDev Notes/i)[0];
-            const m = body.match(/https?:\/\/[^\]\s>)]+/);
-            if (!m) { process.stderr.write('No URL found\n'); process.exit(1); }
-            process.stdout.write(m[0]);
+            const lines = process.env.ISSUE_BODY.split('\n').map(l => l.replace(/\r\$/, ''));
+            let url = '';
+            for (let i = 0; i < lines.length - 1; i++) {
+              const header = lines[i].trim();
+              const sep = lines[i + 1].trim();
+              if (/^\|.*\|\$/.test(header) && /^\|\s*:?-+:?\s*\|\$/.test(sep)) {
+                for (let j = i + 2; j < lines.length; j++) {
+                  const row = lines[j].trim();
+                  if (row === '' || !row.startsWith('|')) break;
+                  const m = row.match(/https?:\/\/[^\]\s>)]+/);
+                  if (m) { url = m[0]; break; }
+                }
+                if (url) break;
+              }
+            }
+            if (!url) { process.stderr.write('No URL found\n'); process.exit(1); }
+            process.stdout.write(url);
           " 2>/dev/null || true)
 
           if [ -z "$PAGE_URL" ]; then
