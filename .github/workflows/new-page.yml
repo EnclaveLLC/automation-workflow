@@ -118,15 +118,17 @@ jobs:
         run: |
           set -euo pipefail
           CLEAN_PATH="${PAGE_PATH#/}"
-          if [ -e "$CLEAN_PATH" ]; then
+          DISPLAY_PATH="${CLEAN_PATH:-/ (site root)}"
+          CHECK_PATH="${CLEAN_PATH:-.}"
+          if [ -e "$CHECK_PATH" ]; then
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
-              -f body="$(printf '### New Page Creation Failed\n\nThe following path already exists in the repository:\n\n❌ %s\n\nPlease choose a different path.' "$CLEAN_PATH")"
+              -f body="$(printf '### New Page Creation Failed\n\nThe following path already exists in the repository:\n\n❌ %s\n\nPlease choose a different path.' "$DISPLAY_PATH")"
             echo "comment_updated=true" >> "$GITHUB_OUTPUT"
-            echo "ERROR: '$CLEAN_PATH' already exists."
+            echo "ERROR: '$DISPLAY_PATH' already exists."
             exit 1
           fi
-          echo "✅ Path '$CLEAN_PATH' is available."
+          echo "✅ Path '$DISPLAY_PATH' is available."
 
   # ── Job 3: Create new page ──────────────────────────────────────────────────
   create-page:
@@ -158,7 +160,12 @@ jobs:
 
       - name: Set branch name
         run: |
-          PAGE_SLUG=$(basename "${PAGE_PATH%/}")
+          CLEAN_PATH="${PAGE_PATH#/}"
+          if [ -z "$CLEAN_PATH" ]; then
+            PAGE_SLUG="root"
+          else
+            PAGE_SLUG=$(basename "${CLEAN_PATH%/}")
+          fi
           echo "PAGE_SLUG=${PAGE_SLUG}" >> "$GITHUB_ENV"
           if [ -n "$LINEAR_ID" ]; then
             echo "BRANCH_NAME=new-page/${LINEAR_ID}-${PAGE_SLUG}" >> "$GITHUB_ENV"

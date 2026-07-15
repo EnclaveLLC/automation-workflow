@@ -9,6 +9,9 @@ on:
       repository:
         required: true
         type: string
+    secrets:
+      NOTION_TOKEN:
+        required: false
 
 jobs:
   # ── Job 1: Find the branch link posted in the issue comments ────────────────
@@ -24,6 +27,7 @@ jobs:
       page_url:        ${{ steps.parse_issue.outputs.page_url }}
       action_line:     ${{ steps.label.outputs.action_line }}
       linear_id:       ${{ steps.linear.outputs.linear_id }}
+      repo_name:       ${{ steps.repo_name.outputs.repo_name }}
       comment_id:      ${{ steps.progress.outputs.comment_id }}
       comment_updated: ${{ steps.find_branch.outputs.comment_updated }}
 
@@ -135,10 +139,27 @@ jobs:
             echo "linear_id: $LINEAR_ID"
           fi
 
-  # ── Job 2: Create the pull request ──────────────────────────────────────────
+      - name: Extract repo name
+        id: repo_name
+        env:
+          REPO: ${{ inputs.repository }}
+        run: |
+          echo "repo_name=${REPO##*/}" >> "$GITHUB_OUTPUT"
+
+  # ── Job 2: Fetch Notion data ─────────────────────────────────────────────────
+  fetch-notion:
+    name: Fetch Notion Data
+    needs: parse-comment
+    uses: ./.github/workflows/notion-parse.yml
+    with:
+      repo_name: ${{ needs.parse-comment.outputs.repo_name }}
+    secrets:
+      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+
+  # ── Job 3: Create the pull request ──────────────────────────────────────────
   create-pr:
     name: Create Pull Request
-    needs: parse-comment
+    needs: [parse-comment, fetch-notion]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -152,6 +173,7 @@ jobs:
       PAGE_URL:     ${{ needs.parse-comment.outputs.page_url }}
       ACTION_LINE:  ${{ needs.parse-comment.outputs.action_line }}
       LINEAR_ID:    ${{ needs.parse-comment.outputs.linear_id }}
+      NOTION_JSON:  ${{ needs.fetch-notion.outputs.notion_json }}
       COMMENT_ID:   ${{ needs.parse-comment.outputs.comment_id }}
     outputs:
       comment_updated: ${{ steps.create_pr.outputs.comment_updated }}
@@ -167,29 +189,66 @@ jobs:
           PAGE_NAME=$(PAGE_URL="$PAGE_URL" node -e "
             const path = require('path');
             const url = new URL(process.env.PAGE_URL);
-            process.stdout.write(path.basename(url.pathname.replace(/\/\$/, '')));
+            const name = path.basename(url.pathname.replace(/\/\$/, ''));
+            process.stdout.write(name || 'root');
           ")
+          export PAGE_NAME
 
-          if [ -n "$LINEAR_ID" ]; then
-            RESOLVES_LINE="Resolves $LINEAR_ID"
-          else
-            RESOLVES_LINE=""
-          fi
+          node - << 'SCRIPT'
+          const fs = require('fs');
 
-          cat > /tmp/pr_body.md << EOF
-          ### Summary:
-          - ${ACTION_LINE} ${PAGE_NAME}
-          - Created branch: ${BRANCH_NAME}
-          - Created pull request
+          const actionLine   = process.env.ACTION_LINE || '';
+          const pageName     = process.env.PAGE_NAME || '';
+          const branchName   = process.env.BRANCH_NAME || '';
+          const pageUrl      = process.env.PAGE_URL || '';
+          const issueNumber  = process.env.ISSUE_NUMBER || '';
+          const linearId     = process.env.LINEAR_ID || '';
 
-          ### GTMetrix Test URLs
-          ${PAGE_URL}
+          const raw = process.env.NOTION_JSON || '';
+          let notionSection = '';
+          if (raw) {
+            const n = JSON.parse(raw);
+            const row = (label, val) => val && String(val).trim()
+              ? `| ${label} | ${String(val).trim()} |\n` : '';
+            notionSection  = '### Notion Page Data:\n\n';
+            notionSection += '| Field | Value |\n|:---|:---|\n';
+            notionSection += row('Domain Name',     n.domain_name);
+            notionSection += row('Product',         n.product);
+            notionSection += row('Type',            n.type);
+            notionSection += row('Buyer / Agency',  n.buyer_agency);
+            notionSection += row('GTM',             n.gtm);
+            notionSection += row('Meta Pixel',      n.meta_pixel);
+            notionSection += row('GDPR',            n.gdpr === true ? 'Yes' : null);
+            notionSection += row('Samcart Domain',  n.samcart_domain);
+            notionSection += row('1 Pack Checkout', n.checkout_1_pack);
+            notionSection += row('3 Pack Checkout', n.checkout_3_pack);
+            notionSection += row('6 Pack Checkout', n.checkout_6_pack);
+            notionSection += row('9 Pack Checkout', n.checkout_9_pack);
+            notionSection += row('Marketplace',     n.marketplace);
+            notionSection += row('Google Accounts', n.google_accounts);
+            notionSection += row('Taboola Pixel',   n.taboola_pixel);
+            notionSection += row('TikTok Pixel',    n.tiktok_pixel);
+            notionSection += row('Offer ID',        n.offer_id);
+          }
 
-          ### Issue
-          #${ISSUE_NUMBER}
-          
-          ${RESOLVES_LINE}
-          EOF
+          const body = [
+            '### Summary:',
+            `- ${actionLine} ${pageName}`,
+            `- Created branch: ${branchName}`,
+            '- Created pull request',
+            '',
+            notionSection.trim(),
+            '',
+            '### GTMetrix Test URLs',
+            pageUrl,
+            '',
+            '### Issue',
+            `#${issueNumber}`,
+            ...(linearId ? ['', `Resolves ${linearId}`] : []),
+          ].join('\n');
+
+          fs.writeFileSync('/tmp/pr_body.md', body);
+          SCRIPT
 
           set +e
           PR_OUTPUT=$(gh pr create \

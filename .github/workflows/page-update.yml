@@ -118,15 +118,17 @@ jobs:
         run: |
           set -euo pipefail
           CLEAN_PATH="${PAGE_PATH#/}"
-          if [ ! -e "$CLEAN_PATH" ]; then
+          DISPLAY_PATH="${CLEAN_PATH:-/ (site root)}"
+          CHECK_PATH="${CLEAN_PATH:-.}"
+          if [ ! -e "$CHECK_PATH" ]; then
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
-              -f body="$(printf '### Page Update Failed\n\nThe following path does not exist in the repository:\n\n❌ %s\n\nPlease check the page URL and try again.' "$CLEAN_PATH")"
+              -f body="$(printf '### Page Update Failed\n\nThe following path does not exist in the repository:\n\n❌ %s\n\nPlease check the page URL and try again.' "$DISPLAY_PATH")"
             echo "comment_updated=true" >> "$GITHUB_OUTPUT"
-            echo "ERROR: '$CLEAN_PATH' does not exist."
+            echo "ERROR: '$DISPLAY_PATH' does not exist."
             exit 1
           fi
-          echo "✅ Path '$CLEAN_PATH' exists."
+          echo "✅ Path '$DISPLAY_PATH' exists."
 
   # ── Job 3: Create update branch ─────────────────────────────────────────────
   create-branch:
@@ -158,7 +160,12 @@ jobs:
 
       - name: Set branch name
         run: |
-          PAGE_SLUG=$(basename "${PAGE_PATH%/}")
+          CLEAN_PATH="${PAGE_PATH#/}"
+          if [ -z "$CLEAN_PATH" ]; then
+            PAGE_SLUG="root"
+          else
+            PAGE_SLUG=$(basename "${CLEAN_PATH%/}")
+          fi
           echo "PAGE_SLUG=${PAGE_SLUG}" >> "$GITHUB_ENV"
           if [ -n "$LINEAR_ID" ]; then
             echo "BRANCH_NAME=page-update/${LINEAR_ID}-${PAGE_SLUG}" >> "$GITHUB_ENV"
