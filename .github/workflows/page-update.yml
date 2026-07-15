@@ -135,7 +135,7 @@ jobs:
       - name: Set branch name
         run: |
           PAGE_SLUG=$(basename "${PAGE_PATH%/}")
-          echo "BRANCH_NAME=page-update:${PAGE_SLUG}" >> "$GITHUB_ENV"
+          echo "BRANCH_NAME=page-update/${PAGE_SLUG}" >> "$GITHUB_ENV"
 
       - name: Check for existing branch
         id: verify_branch
