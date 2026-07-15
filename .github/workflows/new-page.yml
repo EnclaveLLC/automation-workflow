@@ -145,6 +145,7 @@ jobs:
       - name: Set branch name
         run: |
           PAGE_SLUG=$(basename "${PAGE_PATH%/}")
+          echo "PAGE_SLUG=${PAGE_SLUG}" >> "$GITHUB_ENV"
           if [ -n "$LINEAR_ID" ]; then
             echo "BRANCH_NAME=new-page/${LINEAR_ID}-${PAGE_SLUG}" >> "$GITHUB_ENV"
           else
@@ -228,8 +229,8 @@ jobs:
           else
             cat > /tmp/issue_comment.md << CMEOF
           ### Summary:
-          - New page created
-          - Branch created
+          - New Page ${PAGE_SLUG}
+          - Created branch: ${BRANCH_NAME}
 
           The page branch is ready. Comment \`/pr\` on this issue to generate a pull request:
           ${BRANCH_URL}
