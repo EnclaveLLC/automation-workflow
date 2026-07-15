@@ -89,14 +89,28 @@ jobs:
           PR_TITLE:          ${{ inputs.pr_title }}
           RUN_URL:           ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_TOKEN:          ${{ github.token }}
+          REPO:              ${{ github.repository }}
           BADGE_COMPLETED:   ${{ inputs.badge_completed }}
           BADGE_ABORTED:     ${{ inputs.badge_aborted }}
           BADGE_IN_PROGRESS: ${{ inputs.badge_in_progress }}
           BADGE_WAITING:     ${{ inputs.badge_waiting }}
         run: |
-          ISSUE_URL=$(echo "$PR_BODY" \
-            | awk 'tolower($0) ~ /^### issue[[:space:]]*$/{found=1; next} found && /https?:\/\//{match($0,/https?:\/\/[^ \t\r\n]+/); print substr($0,RSTART,RLENGTH); exit}' \
-            | tr -d '\r')
+          ISSUE_URL=$(node -e "
+            const lines = (process.env.PR_BODY || '').split('\n').map(l => l.replace(/\r\$/, ''));
+            let inSection = false;
+            let url = '';
+            for (const line of lines) {
+              if (/^#{1,6}\s+issue\s*\$/.test(line.toLowerCase().trim())) { inSection = true; continue; }
+              if (inSection) {
+                if (/^#{1,6}\s/.test(line.trim())) break;
+                const urlMatch = line.match(/https?:\/\/\S+/);
+                if (urlMatch) { url = urlMatch[0]; break; }
+                const shortMatch = line.trim().match(/^#(\d+)\$/);
+                if (shortMatch && process.env.REPO) { url = 'https://github.com/' + process.env.REPO + '/issues/' + shortMatch[1]; break; }
+              }
+            }
+            process.stdout.write(url);
+          ")
           [ -z "$ISSUE_URL" ] && exit 0
           ISSUE_NUMBER=$(echo "$ISSUE_URL" | grep -oE '[0-9]+$')
 
