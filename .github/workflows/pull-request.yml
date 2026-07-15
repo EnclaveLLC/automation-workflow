@@ -136,6 +136,8 @@ jobs:
       PAGE_URL:     ${{ needs.parse-comment.outputs.page_url }}
       ACTION_LINE:  ${{ needs.parse-comment.outputs.action_line }}
       COMMENT_ID:   ${{ needs.parse-comment.outputs.comment_id }}
+    outputs:
+      comment_updated: ${{ steps.create_pr.outputs.comment_updated }}
 
     steps:
       - name: Create pull request
@@ -164,13 +166,30 @@ jobs:
           #${ISSUE_NUMBER}
           EOF
 
-          PR_URL=$(gh pr create \
+          set +e
+          PR_OUTPUT=$(gh pr create \
             --repo "$REPO" \
             --base "$DEFAULT_BRANCH" \
             --head "$BRANCH_NAME" \
             --title "$ISSUE_TITLE" \
-            --body-file /tmp/pr_body.md)
+            --body-file /tmp/pr_body.md 2>&1)
+          PR_EXIT=$?
+          set -e
 
+          if [ $PR_EXIT -ne 0 ]; then
+            echo "$PR_OUTPUT"
+            if echo "$PR_OUTPUT" | grep -q "No commits between"; then
+              gh api "repos/${REPO}/issues/comments/${COMMENT_ID}" \
+                -X PATCH \
+                -f body="$(printf '### Pull Request Creation Failed\n\nNo changes have been made on branch `%s` yet, so there is nothing to open a pull request for.\n\nMake your edits on that branch, then comment `/pr` again.' "$BRANCH_NAME")"
+              echo "comment_updated=true" >> "$GITHUB_OUTPUT"
+              echo "ERROR: No commits between base branch and $BRANCH_NAME"
+              exit 1
+            fi
+            exit $PR_EXIT
+          fi
+
+          PR_URL="$PR_OUTPUT"
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
           echo "Created PR: $PR_URL"
 
@@ -199,7 +218,8 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       failure() &&
-      needs.parse-comment.outputs.comment_updated != 'true'
+      needs.parse-comment.outputs.comment_updated != 'true' &&
+      needs.create-pr.outputs.comment_updated != 'true'
     permissions:
       issues: write
     env:
