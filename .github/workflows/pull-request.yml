@@ -106,7 +106,7 @@ jobs:
           ")
 
           echo "page_url=$PAGE_URL" >> "$GITHUB_OUTPUT"
-          echo "Parsed page URL for GTmetrix: $PAGE_URL"
+          echo "Parsed page URL: $PAGE_URL"
 
       - name: Determine issue label
         id: label
@@ -239,7 +239,7 @@ jobs:
             '',
             notionSection.trim(),
             '',
-            '### GTMetrix Test URLs',
+            '### Test URLs',
             pageUrl,
             '',
             '### Issue',

@@ -5,7 +5,7 @@
 #   2a. FTP deploy     ─┐ parallel (after PR Info)
 #   2b. AWS deploy     ─┘  each updates its own comment row on finish/skip
 #   3.  Pre QA check       (after deploys — marks Deployment row completed)
-#   4.  GTmetrix check     (after Pre QA)
+#   4.  Post QA check      (after Pre QA)
 # -----------------------------------------------------------------------------
 name: PR Deploy
 
@@ -64,8 +64,6 @@ on:
       AWS_ACCESS_KEY_ID:
         required: false
       AWS_SECRET_ACCESS_KEY:
-        required: false
-      GTMETRIX_API_KEY:
         required: false
 jobs:
 
@@ -135,7 +133,6 @@ jobs:
             `| Deployment | <img src="${badges.waiting}" width="120" data-linear-height="20"> |`,
             `| Pre Quality Assurance | <img src="${badges.waiting}" width="120" data-linear-height="20"> |`,
             `| Post Quality Assurance | <img src="${badges.waiting}" width="120" data-linear-height="20"> |`,
-            `| GT Metrix Test | <img src="${badges.waiting}" width="120" data-linear-height="20"> |`,
             '',
             '<!-- deployment-details -->',
             '<!-- /deployment-details -->',
@@ -143,8 +140,6 @@ jobs:
             '<!-- /qa-details -->',
             '<!-- post-qa-details -->',
             '<!-- /post-qa-details -->',
-            '<!-- gtmetrix-details -->',
-            '<!-- /gtmetrix-details -->',
           ];
           process.stdout.write(lines.join('\n'));
           SCRIPT
@@ -168,7 +163,6 @@ jobs:
           echo "FTP_PASSWORD:          ${{ secrets.FTP_PASSWORD != '' && '✅ set' || '❌ missing' }}"
           echo "AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID != '' && '✅ set' || '❌ missing' }}"
           echo "AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && '✅ set' || '❌ missing' }}"
-          echo "GTMETRIX_API_KEY:      ${{ secrets.GTMETRIX_API_KEY != '' && '✅ set' || '❌ missing' }}"
 
           [ -z "$COMMENT_ID" ] && exit 0
 
@@ -197,16 +191,16 @@ jobs:
             -f body="$NEW_BODY" > /dev/null || true
 
   # ---------------------------------------------------------------------------
-  # Job 2: Parse PR body — extract GTmetrix URLs and issue URL
+  # Job 2: Parse PR body — extract test URLs and issue URL
   # ---------------------------------------------------------------------------
   parse-pr:
     name: Parse PR Body
     needs: [fetching-info]
     runs-on: ubuntu-latest
     outputs:
-      issue_url:    ${{ steps.extract.outputs.issue_url }}
-      gtmetrix_url: ${{ steps.extract.outputs.gtmetrix_url }}
-      gtm:          ${{ steps.extract.outputs.gtm }}
+      issue_url: ${{ steps.extract.outputs.issue_url }}
+      test_urls: ${{ steps.extract.outputs.test_urls }}
+      gtm:       ${{ steps.extract.outputs.gtm }}
     steps:
       - name: Checkout automation-workflow scripts
         uses: actions/checkout@v4
@@ -226,21 +220,21 @@ jobs:
           node .aw/scripts/pr-deploy/parse-pr.js
 
           ISSUE_URL=$(node -e "process.stdout.write(require('/tmp/parse-pr.json').issueUrl)")
-          GTMETRIX_URLS=$(node -e "process.stdout.write(require('/tmp/parse-pr.json').gtmetrixUrls.join('\n'))")
+          TEST_URLS=$(node -e "process.stdout.write(require('/tmp/parse-pr.json').testUrls.join('\n'))")
           GTM=$(node -e "process.stdout.write(require('/tmp/parse-pr.json').gtm || '')")
 
           echo "issue_url=${ISSUE_URL}"
-          echo "gtmetrix_url=${GTMETRIX_URLS}"
+          echo "test_urls=${TEST_URLS}"
           echo "gtm=${GTM}"
 
           if [ -n "$ISSUE_URL" ]; then
             echo "issue_url=${ISSUE_URL}" >> "$GITHUB_OUTPUT"
           fi
-          if [ -n "$GTMETRIX_URLS" ]; then
-            DELIM="GTMETRIX_$(openssl rand -hex 8)"
+          if [ -n "$TEST_URLS" ]; then
+            DELIM="TEST_URLS_$(openssl rand -hex 8)"
             {
-              echo "gtmetrix_url<<${DELIM}"
-              echo "${GTMETRIX_URLS}"
+              echo "test_urls<<${DELIM}"
+              echo "${TEST_URLS}"
               echo "${DELIM}"
             } >> "$GITHUB_OUTPUT"
           fi
@@ -304,49 +298,21 @@ jobs:
       issues: write
 
   # ---------------------------------------------------------------------------
-  # Job 6a: GTmetrix performance check (runs after pre-QA)
-  # ---------------------------------------------------------------------------
-  gtmetrix:
-    name: GTmetrix Check
-    needs: [fetching-info, parse-pr, pre-qa-check]
-    if: |
-      !cancelled() &&
-      needs.parse-pr.outputs.gtmetrix_url != '' &&
-      needs.parse-pr.outputs.issue_url != ''
-    permissions:
-      actions: read
-      contents: write
-      issues: write
-      pull-requests: read
-      id-token: write
-    uses: ./.github/workflows/gtmetrix.yml
-    with:
-      gtmetrix_url: ${{ needs.parse-pr.outputs.gtmetrix_url }}
-      issue_url: ${{ needs.parse-pr.outputs.issue_url }}
-      comment_id: ${{ needs.fetching-info.outputs.comment_id }}
-      badge_completed: ${{ inputs.badge_completed }}
-      badge_aborted: ${{ inputs.badge_aborted }}
-      badge_in_progress: ${{ inputs.badge_in_progress }}
-      badge_waiting: ${{ inputs.badge_waiting }}
-    secrets:
-      GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}
-  
-  # ---------------------------------------------------------------------------
-  # Job 6b: Post QA Validation (runs after pre-QA)
+  # Job 6: Post QA Validation (runs after pre-QA)
   # ---------------------------------------------------------------------------
   post-qa-check:
     name: Post QA Validation
     needs: [fetching-info, parse-pr, pre-qa-check]
     if: |
       !cancelled() &&
-      needs.parse-pr.outputs.gtmetrix_url != '' &&
+      needs.parse-pr.outputs.test_urls != '' &&
       needs.parse-pr.outputs.issue_url != ''
     permissions:
       contents: read
       issues: write
     uses: ./.github/workflows/post-qa-check.yml
     with:
-      urls: ${{ needs.parse-pr.outputs.gtmetrix_url }}
+      urls: ${{ needs.parse-pr.outputs.test_urls }}
       issue_url: ${{ needs.parse-pr.outputs.issue_url }}
       comment_id: ${{ needs.fetching-info.outputs.comment_id }}
       gtm_id: ${{ needs.parse-pr.outputs.gtm }}
@@ -358,11 +324,11 @@ jobs:
       badge_failed: ${{ inputs.badge_failed }}
 
   # ---------------------------------------------------------------------------
-  # Job 6: Mark workflow completed (runs after GTmetrix)
+  # Job 7: Mark workflow completed (runs after Post QA)
   # ---------------------------------------------------------------------------
   workflow-complete:
     name: Mark Workflow Completed
-    needs: [fetching-info, gtmetrix]
+    needs: [fetching-info, post-qa-check]
     if: |
       !cancelled() &&
       needs.fetching-info.outputs.comment_id != ''

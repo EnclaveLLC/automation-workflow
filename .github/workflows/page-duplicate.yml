@@ -32,7 +32,7 @@ jobs:
       ref_host:        ${{ steps.parse.outputs.ref_host }}
       new_host:        ${{ steps.parse.outputs.new_host }}
       cta_links:       ${{ steps.parse.outputs.cta_links }}
-      gtmetrix_urls:   ${{ steps.parse.outputs.gtmetrix_urls }}
+      test_urls:       ${{ steps.parse.outputs.test_urls }}
       replace_mapping: ${{ steps.parse.outputs.replace_mapping }}
       comment_id:      ${{ steps.progress_comment.outputs.comment_id }}
       linear_id:       ${{ steps.parse.outputs.linear_id }}
@@ -211,6 +211,7 @@ jobs:
         run: |
           pwd
           ls -la
+          mkdir -p pages
           ls -la pages
 
       - name: Duplicate folder
@@ -298,7 +299,7 @@ jobs:
       - name: Create pull request
         id: create_pr
         env:
-          GTMETRIX_URLS:  ${{ needs.parse-issue.outputs.gtmetrix_urls }}
+          TEST_URLS:      ${{ needs.parse-issue.outputs.test_urls }}
           NOTION_JSON:    ${{ needs.fetch-notion.outputs.notion_json }}
           REPO:           ${{ github.repository }}
           ISSUE_NUMBER:   ${{ inputs.issue_number }}
@@ -312,7 +313,7 @@ jobs:
           const repo = process.env.REPO;
           const num  = process.env.ISSUE_NUMBER;
 
-          const gtmetrixUrls = (process.env.GTMETRIX_URLS || '')
+          const testUrls = (process.env.TEST_URLS || '')
             .split('\n').filter(Boolean).map(u => `- ${u}`).join('\n');
 
           const raw = process.env.NOTION_JSON || '';
@@ -352,8 +353,8 @@ jobs:
             '',
             notionSection.trim(),
             '',
-            '### GTMetrix Test URLs',
-            gtmetrixUrls,
+            '### Test URLs',
+            testUrls,
             '',
             '### Issue',
             `https://github.com/${repo}/issues/${num}`,

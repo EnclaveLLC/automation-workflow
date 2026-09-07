@@ -29,8 +29,6 @@ jobs:
 
       - name: Run Claude Code
         id: claude
-        env:
-          GTMETRIX_API_KEY: ${{ secrets.GTMETRIX_API_KEY }}
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

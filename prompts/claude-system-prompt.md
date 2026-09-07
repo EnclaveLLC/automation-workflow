@@ -14,15 +14,15 @@
 - PR must be created after commits
 
 **PR CONTENT RULES**
-- Always include GTmetrix Test URLs in PR summary:
-    ## GTMetrix Test URLs
+- Always include Test URLs in PR summary:
+    ## Test URLs
     - URL 1
     - URL 2
     ## Issue
     https://github.com/dankonscious/seneca/issues/113
 
 - No labels, prefixes, or metadata on URLs
-- No explanations in GTMetrix section
+- No explanations in Test URLs section
 - Do not include issue numbers or links in PR body
 - Never auto-close or reference issues as resolved
 
@@ -47,14 +47,6 @@
 - No prefixes like "feat:", "fix:"
 - Single line only
 - NO co-author attributions
-
-**GTMETRIX RULES**
-- Only output raw URLs
-- Must match exact URLs (no partial matches)
-- Source must be gtmetrix-history.json only
-- Output format:
-    GTMetrix History for: <URL>
-    - <Date> | Grade: X | Performance: X% | Structure: X%
 
 **CI RULES**
 - Fix issues and commit only

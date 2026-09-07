@@ -93,7 +93,7 @@ if (!ref_url || !new_url) {
   process.exit(1);
 }
 
-const gtmetrix_urls = `${ref_url}\n${new_url}`;
+const test_urls = `${ref_url}\n${new_url}`;
 
 const ref_path = new URL(ref_url).pathname.replace(/^\//, '');
 const duplicate_path = new URL(new_url).pathname.replace(/^\//, '');
@@ -117,9 +117,9 @@ const out = [
   `duplicate_path=${duplicate_path}`,
   `ref_host=${ref_host}`,
   `new_host=${new_host}`,
-  'gtmetrix_urls<<GTEOF',
-  gtmetrix_urls,
-  'GTEOF',
+  'test_urls<<TESTEOF',
+  test_urls,
+  'TESTEOF',
   'cta_links<<CTAEOF',
   ctaFormatted,
   'CTAEOF',
@@ -137,6 +137,6 @@ console.log(`ref_path:        ${ref_path}`);
 console.log(`duplicate_path:  ${duplicate_path}`);
 console.log(`ref_host:        ${ref_host}`);
 console.log(`new_host:        ${new_host}`);
-console.log(`gtmetrix_urls:\n${gtmetrix_urls}`);
+console.log(`test_urls:\n${test_urls}`);
 console.log(`cta_links:\n${ctaFormatted}`);
 console.log(`replace_mapping: ${JSON.stringify(replace_mapping)}`);

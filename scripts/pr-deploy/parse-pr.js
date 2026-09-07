@@ -65,17 +65,17 @@ function extractNotionField(fieldName) {
   return '';
 }
 
-const gtmetrixUrls = extractSection(/^#{1,6}\s+gtmetrix test urls?$/);
-const issueUrl     = extractIssueUrl();
-const gtm          = extractNotionField('GTM');
+const testUrls = extractSection(/^#{1,6}\s+test urls?$/);
+const issueUrl = extractIssueUrl();
+const gtm      = extractNotionField('GTM');
 
 const result = {
   issueUrl,
-  gtmetrixUrls,
+  testUrls,
   gtm,
 };
 
-console.log('GTMetrix URLs (' + gtmetrixUrls.length + '):', gtmetrixUrls);
+console.log('Test URLs (' + testUrls.length + '):', testUrls);
 console.log('Issue URL:', result.issueUrl);
 console.log('GTM:', gtm);
 
