@@ -65,9 +65,9 @@ on:
         required: false
       AWS_SECRET_ACCESS_KEY:
         required: false
-      NEXT_PUBLIC_SUPABASE_URL:
+      SUPABASE_URL:
         required: false
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+      SUPABASE_SECRET_KEY:
         required: false
 jobs:
 
@@ -315,8 +315,8 @@ jobs:
       test_urls: ${{ needs.parse-pr.outputs.test_urls }}
       linear_id: ${{ needs.parse-pr.outputs.linear_id }}
     secrets:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
 
   # ---------------------------------------------------------------------------
   # Job 5: QA Validation (runs after deploys)

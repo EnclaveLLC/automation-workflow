@@ -17,9 +17,10 @@ on:
         type: string
         default: ""
     secrets:
-      NEXT_PUBLIC_SUPABASE_URL:
+      SUPABASE_URL:
         required: true
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+      SUPABASE_SECRET_KEY:
+        description: "Server-side Supabase secret key (sb_secret_...) — needed because the domains table has no anon/publishable read access (see EnclaveLLC/enclave-vsl-hub's enable_rls migration)"
         required: true
 
 jobs:
@@ -39,8 +40,8 @@ jobs:
 
       - name: Update Supabase split_test record
         env:
-          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           REPO:         ${{ github.repository }}
           PR_LABELS:    ${{ inputs.pr_labels }}
           TEST_URLS:    ${{ inputs.test_urls }}
