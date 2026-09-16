@@ -78,9 +78,10 @@ workflows in this repo, never directly by a caller repo's wrapper.
 |---|---|---|---|
 | `claude.yml` | — | `CLAUDE_CODE_OAUTH_TOKEN` | Runs `claude-code-action` with `prompts/claude-system-prompt.md`, model `claude-opus-4-5`, `--max-turns 100`. |
 | `push-deploy.yml` | — | `FTP_*`, `AWS_*` | Direct-push pipeline: `ftp-deploy.yml` + `aws-deploy.yml` in parallel, no QA. |
-| `pr-deploy.yml` | `pr_number`, `pr_title`, `pr_body` | `FTP_*`, `AWS_*` | Merged-PR pipeline: status comment → parse PR body (`scripts/pr-deploy/parse-pr.js`) → deploy-ftp + deploy-aws → pre-QA → post-QA → mark comment "Completed". |
+| `pr-deploy.yml` | `pr_number`, `pr_title`, `pr_body` | `FTP_*`, `AWS_*`, `NEXT_PUBLIC_SUPABASE_URL/PUBLISHABLE_KEY` (opt) | Merged-PR pipeline: status comment → parse PR body (`scripts/pr-deploy/parse-pr.js`) → deploy-ftp + deploy-aws + update-supabase-split-test (parallel) → pre-QA → post-QA → mark comment "Completed". Also fetches the PR's labels (`pr_labels` output) via `gh pr view`. |
 | `ftp-deploy.yml` | — | `FTP_SERVER/USERNAME/PASSWORD` | Diffs changed web files, rewrites `<img>`/`srcset` to CloudFront `.webp` (`scripts/ftp_deploy/replace-img.js`), uploads via `FTP-Deploy-Action`. |
 | `aws-deploy.yml` | — | `AWS_ACCESS_KEY_ID/SECRET_ACCESS_KEY` | Converts changed images to `.webp` via `sharp`, syncs to `s3://cdn-konscious/<repo>/…`, deletes removed originals. |
+| `supabase-split-test.yml` | `pr_labels`, `test_urls`, `linear_id` (opt) | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Only runs when `pr_labels` contains `Split Test On`/`Off`. Looks up `domain_id` from the Supabase `domains` table (matched on `repo`), derives control/variation page slugs from `test_urls` (first URL = control), and inserts a row into `split_test` (`scripts/pr-deploy/update-supabase-split-test.js`). |
 | `notion-parse.yml` | `repo_name` | `NOTION_TOKEN` | Looks up the site's row in Notion (domain/GTM/pixels/checkout links/buyer/GDPR) by `URL contains repo_name`; outputs `notion_json`. |
 | `pre-qa-check.yml` | — | — | Static: every changed image < 1MB, every changed file has a recognized extension. |
 | `post-qa-check.yml` | `urls`, `gtm_id` | — | Playwright: live image weight, CDN host check, `noindex,nofollow`, GTM container ID present. |
@@ -106,7 +107,8 @@ never CLI flags.
 | `scripts/page_duplicate/parse-issue.js` | `page-duplicate.yml` | Parses Reference/New Page + CTA + Search/Replace tables; derives `ref_host`/`new_host` to detect cross-repo duplication. |
 | `scripts/page_duplicate/build_cta_pairs.js` | `page-duplicate.yml` | Builds old→new CTA pairs, preferring Notion checkout URLs over the caller repo's `constant-files/samcart-links.json`. |
 | `scripts/page_duplicate/verify.js` | **nothing currently** | Orphaned — no workflow invokes it. Leave alone unless you're deliberately re-wiring page-duplicate.yml to use it. |
-| `scripts/pr-deploy/parse-pr.js` | `pr-deploy.yml` | Extracts `### Issue` URL and `### Test URLs` from the PR body; writes `/tmp/parse-pr.json`. |
+| `scripts/pr-deploy/parse-pr.js` | `pr-deploy.yml` | Extracts `### Issue` URL, `### Test URLs`, GTM, and a trailing `Resolves <LINEAR-ID>` line from the PR body; writes `/tmp/parse-pr.json`. |
+| `scripts/pr-deploy/update-supabase-split-test.js` | `supabase-split-test.yml` | Resolves `domain_id` from Supabase `domains` (by `repo`), derives page slugs from test URLs, inserts a row into `split_test` via the PostgREST API. |
 | `scripts/split_test/parse_issue.js` | `split-test.yml`, `split-test-check.yml` | Parses Control Page URL + Page Variations table. |
 | `scripts/split_test/add_split_test_code.js` | `split-test.yml` (type=on) | Prepends the PHP `SplitTester` block. |
 | `scripts/split_test/remove_split_test_code.js` | `split-test.yml` (type=off) | Strips the block `add_split_test_code.js` added. |

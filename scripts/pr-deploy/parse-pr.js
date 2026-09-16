@@ -65,18 +65,29 @@ function extractNotionField(fieldName) {
   return '';
 }
 
+function extractLinearId() {
+  for (const line of lines) {
+    const m = line.trim().match(/^resolves\s+([a-z]+-\d+)/i);
+    if (m) return m[1].toUpperCase();
+  }
+  return '';
+}
+
 const testUrls = extractSection(/^#{1,6}\s+test urls?$/);
 const issueUrl = extractIssueUrl();
 const gtm      = extractNotionField('GTM');
+const linearId = extractLinearId();
 
 const result = {
   issueUrl,
   testUrls,
   gtm,
+  linearId,
 };
 
 console.log('Test URLs (' + testUrls.length + '):', testUrls);
 console.log('Issue URL:', result.issueUrl);
 console.log('GTM:', gtm);
+console.log('Linear ID:', linearId);
 
 fs.writeFileSync('/tmp/parse-pr.json', JSON.stringify(result));

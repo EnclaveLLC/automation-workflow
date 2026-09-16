@@ -1,0 +1,48 @@
+name: Supabase Split Test Update
+
+on:
+  workflow_call:
+    inputs:
+      pr_labels:
+        description: "Comma-separated labels on the merged PR"
+        required: true
+        type: string
+      test_urls:
+        description: "Newline-separated test URLs from the PR body (first = control page, rest = variations)"
+        required: true
+        type: string
+      linear_id:
+        description: "Linear ticket ID resolved by the PR, if any"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      NEXT_PUBLIC_SUPABASE_URL:
+        required: true
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+        required: true
+
+jobs:
+  update-split-test:
+    name: Update Split Test Record
+    if: contains(inputs.pr_labels, 'Split Test On') || contains(inputs.pr_labels, 'Split Test Off')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout automation-workflow scripts
+        uses: actions/checkout@v4
+        with:
+          repository: EnclaveLLC/automation-workflow
+          ref: main
+          sparse-checkout: scripts/
+          path: .aw
+          token: ${{ github.token }}
+
+      - name: Update Supabase split_test record
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          REPO:         ${{ github.repository }}
+          PR_LABELS:    ${{ inputs.pr_labels }}
+          TEST_URLS:    ${{ inputs.test_urls }}
+          LINEAR_ID:    ${{ inputs.linear_id }}
+        run: node .aw/scripts/pr-deploy/update-supabase-split-test.js

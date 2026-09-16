@@ -65,6 +65,10 @@ on:
         required: false
       AWS_SECRET_ACCESS_KEY:
         required: false
+      NEXT_PUBLIC_SUPABASE_URL:
+        required: false
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+        required: false
 jobs:
 
   # ---------------------------------------------------------------------------
@@ -215,6 +219,7 @@ jobs:
       issue_url: ${{ steps.extract.outputs.issue_url }}
       test_urls: ${{ steps.extract.outputs.test_urls }}
       gtm:       ${{ steps.extract.outputs.gtm }}
+      linear_id: ${{ steps.extract.outputs.linear_id }}
     steps:
       - name: Checkout automation-workflow scripts
         uses: actions/checkout@v4
@@ -236,10 +241,12 @@ jobs:
           ISSUE_URL=$(node -e "process.stdout.write(require('/tmp/parse-pr.json').issueUrl)")
           TEST_URLS=$(node -e "process.stdout.write(require('/tmp/parse-pr.json').testUrls.join('\n'))")
           GTM=$(node -e "process.stdout.write(require('/tmp/parse-pr.json').gtm || '')")
+          LINEAR_ID=$(node -e "process.stdout.write(require('/tmp/parse-pr.json').linearId || '')")
 
           echo "issue_url=${ISSUE_URL}"
           echo "test_urls=${TEST_URLS}"
           echo "gtm=${GTM}"
+          echo "linear_id=${LINEAR_ID}"
 
           if [ -n "$ISSUE_URL" ]; then
             echo "issue_url=${ISSUE_URL}" >> "$GITHUB_OUTPUT"
@@ -254,6 +261,9 @@ jobs:
           fi
           if [ -n "$GTM" ]; then
             echo "gtm=${GTM}" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$LINEAR_ID" ]; then
+            echo "linear_id=${LINEAR_ID}" >> "$GITHUB_OUTPUT"
           fi
 
   # ---------------------------------------------------------------------------
@@ -288,6 +298,25 @@ jobs:
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+  # ---------------------------------------------------------------------------
+  # Job 4: Update Supabase split-test record (runs after deploys, parallel to Pre QA)
+  # ---------------------------------------------------------------------------
+  update-supabase-split-test:
+    name: Update Supabase Split Test
+    needs: [fetching-info, parse-pr, deploy-ftp, deploy-aws]
+    if: |
+      !cancelled() &&
+      (contains(needs.fetching-info.outputs.pr_labels, 'Split Test On') ||
+       contains(needs.fetching-info.outputs.pr_labels, 'Split Test Off'))
+    uses: ./.github/workflows/supabase-split-test.yml
+    with:
+      pr_labels: ${{ needs.fetching-info.outputs.pr_labels }}
+      test_urls: ${{ needs.parse-pr.outputs.test_urls }}
+      linear_id: ${{ needs.parse-pr.outputs.linear_id }}
+    secrets:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
 
   # ---------------------------------------------------------------------------
   # Job 5: QA Validation (runs after deploys)
