@@ -27,6 +27,7 @@ jobs:
       page_url:        ${{ steps.parse_issue.outputs.page_url }}
       action_line:     ${{ steps.label.outputs.action_line }}
       linear_id:       ${{ steps.linear.outputs.linear_id }}
+      issue_labels:    ${{ steps.issue_labels.outputs.issue_labels }}
       repo_name:       ${{ steps.repo_name.outputs.repo_name }}
       comment_id:      ${{ steps.progress.outputs.comment_id }}
       comment_updated: ${{ steps.find_branch.outputs.comment_updated }}
@@ -124,6 +125,17 @@ jobs:
             echo "action_line=New Page" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Fetch issue labels
+        id: issue_labels
+        env:
+          REPO:         ${{ inputs.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          LABELS=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | join(",")')
+          echo "issue_labels=$LABELS" >> "$GITHUB_OUTPUT"
+          echo "Issue labels: $LABELS"
+
       - name: Extract Linear ID
         id: linear
         env:
@@ -173,6 +185,7 @@ jobs:
       PAGE_URL:     ${{ needs.parse-comment.outputs.page_url }}
       ACTION_LINE:  ${{ needs.parse-comment.outputs.action_line }}
       LINEAR_ID:    ${{ needs.parse-comment.outputs.linear_id }}
+      ISSUE_LABELS: ${{ needs.parse-comment.outputs.issue_labels }}
       NOTION_JSON:  ${{ needs.fetch-notion.outputs.notion_json }}
       COMMENT_ID:   ${{ needs.parse-comment.outputs.comment_id }}
     outputs:
@@ -250,13 +263,22 @@ jobs:
           fs.writeFileSync('/tmp/pr_body.md', body);
           SCRIPT
 
+          LABEL_ARGS=()
+          if [ -n "${ISSUE_LABELS:-}" ]; then
+            IFS=',' read -ra ISSUE_LABEL_LIST <<< "$ISSUE_LABELS"
+            for l in "${ISSUE_LABEL_LIST[@]}"; do
+              LABEL_ARGS+=(--label "$l")
+            done
+          fi
+
           set +e
           PR_OUTPUT=$(gh pr create \
             --repo "$REPO" \
             --base "$DEFAULT_BRANCH" \
             --head "$BRANCH_NAME" \
             --title "$ISSUE_TITLE" \
-            --body-file /tmp/pr_body.md 2>&1)
+            --body-file /tmp/pr_body.md \
+            "${LABEL_ARGS[@]}" 2>&1)
           PR_EXIT=$?
           set -e
 
