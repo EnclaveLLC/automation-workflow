@@ -36,6 +36,7 @@ jobs:
       replace_mapping: ${{ steps.parse.outputs.replace_mapping }}
       comment_id:      ${{ steps.progress_comment.outputs.comment_id }}
       linear_id:       ${{ steps.parse.outputs.linear_id }}
+      issue_labels:    ${{ steps.issue_labels.outputs.issue_labels }}
 
     steps:
       - name: Comment page duplication in progress
@@ -69,8 +70,13 @@ jobs:
             echo "linear_id: $LINEAR_ID"
           fi
 
-
-  
+      - name: Fetch issue labels
+        id: issue_labels
+        run: |
+          set -euo pipefail
+          LABELS=$(gh issue view "${{ inputs.issue_number }}" --repo "${{ github.repository }}" --json labels --jq '[.labels[].name] | join(",")')
+          echo "issue_labels=$LABELS" >> "$GITHUB_OUTPUT"
+          echo "Issue labels: $LABELS"
 
   # ── Job 3: Verify duplicate path does not already exist ───────────────────
   check-duplicate-path:
@@ -305,6 +311,7 @@ jobs:
           ISSUE_NUMBER:   ${{ inputs.issue_number }}
           LINEAR_ID:      ${{ needs.parse-issue.outputs.linear_id }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          ISSUE_LABELS:   ${{ needs.parse-issue.outputs.issue_labels }}
         run: |
           set -euo pipefail
 
@@ -367,11 +374,20 @@ jobs:
           ISSUE_TITLE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json title --jq '.title')
           PR_TITLE="$ISSUE_TITLE"
 
+          LABEL_ARGS=()
+          if [ -n "${ISSUE_LABELS:-}" ]; then
+            IFS=',' read -ra ISSUE_LABEL_LIST <<< "$ISSUE_LABELS"
+            for l in "${ISSUE_LABEL_LIST[@]}"; do
+              LABEL_ARGS+=(--label "$l")
+            done
+          fi
+
           PR_URL=$(gh pr create \
             --base  "$DEFAULT_BRANCH" \
             --head  "$BRANCH_NAME" \
             --title "$PR_TITLE" \
-            --body-file /tmp/pr_body.md)
+            --body-file /tmp/pr_body.md \
+            "${LABEL_ARGS[@]}")
 
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
           echo "Created PR: $PR_URL"
