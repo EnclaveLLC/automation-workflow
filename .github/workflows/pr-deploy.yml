@@ -79,6 +79,7 @@ jobs:
       issues: write
     outputs:
       comment_id: ${{ steps.deploy_comment.outputs.comment_id }}
+      pr_labels:  ${{ steps.pr_labels.outputs.pr_labels }}
     steps:
       - name: Post initial workflow status comment
         id: deploy_comment
@@ -189,6 +190,19 @@ jobs:
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
             -f body="$NEW_BODY" > /dev/null || true
+
+      - name: Fetch PR labels
+        id: pr_labels
+        if: inputs.pr_number != ''
+        env:
+          GH_TOKEN:  ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          REPO:      ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          LABELS=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels --jq '[.labels[].name] | join(",")')
+          echo "pr_labels=$LABELS" >> "$GITHUB_OUTPUT"
+          echo "PR labels: $LABELS"
 
   # ---------------------------------------------------------------------------
   # Job 2: Parse PR body — extract test URLs and issue URL
