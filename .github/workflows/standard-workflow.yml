@@ -20,6 +20,9 @@ on:
         required: false
         type: string
         default: ''
+    secrets:
+      LINEAR_API_KEY:
+        required: false
 
 jobs:
 
@@ -89,6 +92,11 @@ jobs:
             issues: read
         env:
             GH_TOKEN: ${{ github.token }}
+        outputs:
+            linear_id: ${{ steps.parse.outputs.linear_id }}
+            pages: ${{ steps.pages.outputs.pages }}
+            assignee_name: ${{ steps.assignee.outputs.assignee_name }}
+            assignee_email: ${{ steps.assignee.outputs.assignee_email }}
         steps:
             - name: Checkout automation-workflow
               uses: actions/checkout@v4
@@ -98,8 +106,82 @@ jobs:
                   token: ${{ github.token }}
 
             - name: Parse issue body
+              id: parse
               run: |
                   ISSUE_BODY=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }} --jq '.body')
                   ISSUE_LABEL=$(gh issue view "${{ inputs.issue_number }}" --repo "${{ github.repository }}" --json labels --jq '.labels[0].name // ""')
-                  export ISSUE_BODY ISSUE_LABEL
+                  ISSUE_COMMENTS=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments)
+                  export ISSUE_BODY ISSUE_LABEL ISSUE_COMMENTS
                   node EnclaveLLC/automation-workflow/scripts/parser/issue-parser.js
+
+            - name: Fetch Linear assignee
+              id: assignee
+              if: steps.parse.outputs.linear_id != ''
+              env:
+                  LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+                  LINEAR_ID: ${{ steps.parse.outputs.linear_id }}
+              run: |
+                  node -e "
+                  async function main() {
+                    const res = await fetch('https://api.linear.app/graphql', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': process.env.LINEAR_API_KEY,
+                      },
+                      body: JSON.stringify({
+                        query: 'query(\$id: String!) { issue(id: \$id) { assignee { name email } } }',
+                        variables: { id: process.env.LINEAR_ID },
+                      }),
+                    });
+                    const json = await res.json();
+                    if (json.errors) {
+                      console.error('Linear API error:', JSON.stringify(json.errors));
+                      process.exit(1);
+                    }
+                    const assignee = (json.data && json.data.issue && json.data.issue.assignee) || null;
+                    const name = assignee ? assignee.name : '';
+                    const email = assignee ? assignee.email : '';
+                    console.log(\`assignee: \${name} <\${email}>\`);
+                    require('fs').appendFileSync(process.env.GITHUB_OUTPUT, \`assignee_name=\${name}\nassignee_email=\${email}\n\`);
+                  }
+                  main().catch(err => { console.error(err); process.exit(1); });
+                  "
+
+            - name: Restructure pages
+              id: pages
+              env:
+                  ISSUE_TYPE: ${{ steps.parse.outputs.issue_type }}
+                  PAGE_UPDATE_URLS: ${{ steps.parse.outputs.page_update_urls }}
+                  SPLIT_TEST_CONTROL_URL: ${{ steps.parse.outputs.split_test_control_url }}
+                  SPLIT_TEST_VARIATIONS: ${{ steps.parse.outputs.split_test_variations }}
+                  NEW_PAGE_URLS: ${{ steps.parse.outputs.new_page_urls }}
+                  CHECKOUT_URLS: ${{ steps.parse.outputs.checkout_urls }}
+                  WISTIA_URLS: ${{ steps.parse.outputs.wistia_urls }}
+              run: |
+                  node -e "
+                  const pages = [];
+                  const newPageType = process.env.ISSUE_TYPE === 'page_duplicate' ? 'page_duplicate' : 'new_page';
+
+                  for (const url of JSON.parse(process.env.PAGE_UPDATE_URLS || '[]')) {
+                    pages.push({ type: 'page_update', url });
+                  }
+                  for (const url of JSON.parse(process.env.NEW_PAGE_URLS || '[]')) {
+                    pages.push({ type: newPageType, url });
+                  }
+                  if (process.env.SPLIT_TEST_CONTROL_URL) {
+                    pages.push({ type: 'split_test_control', url: process.env.SPLIT_TEST_CONTROL_URL });
+                  }
+                  for (const v of JSON.parse(process.env.SPLIT_TEST_VARIATIONS || '[]')) {
+                    pages.push({ type: 'split_test_variation', name: v.name, url: v.url });
+                  }
+                  for (const c of JSON.parse(process.env.CHECKOUT_URLS || '[]')) {
+                    pages.push({ type: 'checkout', pack: c.pack, url: c.url });
+                  }
+                  for (const w of JSON.parse(process.env.WISTIA_URLS || '[]')) {
+                    pages.push({ type: 'wistia', device: w.device, url: w.url });
+                  }
+
+                  console.log(JSON.stringify(pages, null, 2));
+                  require('fs').appendFileSync(process.env.GITHUB_OUTPUT, \`pages=\${JSON.stringify(pages)}\n\`);
+                  "

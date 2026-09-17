@@ -14,6 +14,12 @@ const body = process.env.ISSUE_BODY || fs.readFileSync(issueFile, 'utf8');
 // override with ISSUE_LABEL=<label> when testing a specific issue type.
 const issueLabel = process.env.ISSUE_LABEL || '';
 
+// Once wired into a workflow, ISSUE_COMMENTS is set to the raw JSON array
+// from `gh api .../issues/<n>/comments` (each item has `user.login`/`body`).
+// Locally it defaults to '[]'.
+let issueComments = [];
+try { issueComments = JSON.parse(process.env.ISSUE_COMMENTS || '[]'); } catch (e) { issueComments = []; }
+
 const ISSUE_TYPES = {
   PAGE_UPDATE: 'page_update',
   SPLIT_TEST: 'split_test',
@@ -186,6 +192,20 @@ function findButtonDropTime(rawBody) {
   return match ? match[1] : '';
 }
 
+// Finds the Linear issue ID (e.g. "RD-814") from the linear-code bot's
+// comment on the issue.
+function findLinearId(comments) {
+  for (const comment of comments) {
+    const login = (comment.user && comment.user.login) || '';
+    if (!/linear/i.test(login)) continue;
+
+    const match = (comment.body || '').match(/[A-Z]+-[0-9]+/);
+    if (match) return match[0];
+  }
+
+  return '';
+}
+
 // Maps a raw issue label (e.g. "Page Update", "split-test") to one of ISSUE_TYPES.
 function resolveIssueType(label) {
   const l = normalizeHeader(label).replace(/-/g, '');
@@ -206,18 +226,20 @@ const tables = parseTables(lines);
 const page_update_urls = findColumnUrls(tables, ['Page Update']);
 const split_test_control_url = findColumnUrl(tables, ['Control Page URL']);
 const split_test_variations = findVariations(tables);
-const new_page_url = findColumnUrl(tables, ['New Page']);
+const new_page_urls = findColumnUrls(tables, ['New Page']);
 const checkout_urls = findCheckoutUrls(body);
 const wistia_urls = findWistiaUrls(body);
 const button_drop_time = findButtonDropTime(body);
+const linear_id = findLinearId(issueComments);
 
-if (!page_update_urls.length && !split_test_control_url && !new_page_url && !checkout_urls.length && !wistia_urls.length) {
+if (!page_update_urls.length && !split_test_control_url && !new_page_urls.length && !checkout_urls.length && !wistia_urls.length) {
   console.error('ERROR: No known table (Page Update / Control Page URL / New Page), checkout URLs, or Wistia URLs found in issue body.');
   process.exit(1);
 }
 
 const page_update_urls_json = JSON.stringify(page_update_urls);
 const split_test_variations_json = JSON.stringify(split_test_variations);
+const new_page_urls_json = JSON.stringify(new_page_urls);
 const checkout_urls_json = JSON.stringify(checkout_urls);
 const wistia_urls_json = JSON.stringify(wistia_urls);
 
@@ -227,20 +249,22 @@ const out = [
   `page_update_urls=${page_update_urls_json}`,
   `split_test_control_url=${split_test_control_url}`,
   `split_test_variations=${split_test_variations_json}`,
-  `new_page_url=${new_page_url}`,
+  `new_page_urls=${new_page_urls_json}`,
   `checkout_urls=${checkout_urls_json}`,
   `wistia_urls=${wistia_urls_json}`,
   `button_drop_time=${button_drop_time}`,
+  `linear_id=${linear_id}`,
   '',
 ].join('\n');
 
 if (outputFile) fs.appendFileSync(outputFile, out);
 
 if (issue_type) console.log(`issue_type:              ${issue_type}`);
+if (linear_id) console.log(`linear_id:               ${linear_id}`);
 if (page_update_urls.length) console.log(`page_update_urls:       ${page_update_urls_json}`);
 if (split_test_control_url) console.log(`split_test_control_url: ${split_test_control_url}`);
 if (split_test_variations.length) console.log(`split_test_variations:  ${split_test_variations_json}`);
-if (new_page_url) console.log(`new_page_url:           ${new_page_url}`);
+if (new_page_urls.length) console.log(`new_page_urls:          ${new_page_urls_json}`);
 if (checkout_urls.length) console.log(`checkout_urls:           ${checkout_urls_json}`);
 if (wistia_urls.length) console.log(`wistia_urls:             ${wistia_urls_json}`);
 if (button_drop_time) console.log(`button_drop_time:        ${button_drop_time}`);
