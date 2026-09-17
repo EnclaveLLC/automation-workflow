@@ -1,0 +1,205 @@
+# -----------------------------------------------------------------------------
+# Workflow: Issue Closed
+# On a closed issue, parses its body for page/wistia/checkout/button-drop data
+# and logs it as that page's expected state in Supabase's `expected` table.
+# -----------------------------------------------------------------------------
+name: Issue Closed
+
+on:
+  workflow_call:
+    inputs:
+      issue_number:
+        required: true
+        type: number
+    secrets:
+      LINEAR_API_KEY:
+        required: false
+      SUPABASE_URL:
+        required: false
+      SUPABASE_SECRET_KEY:
+        description: "Server-side Supabase secret key (sb_secret_...) — needed because the domains/expected tables have no anon/publishable read access (see EnclaveLLC/enclave-vsl-hub's enable_rls migration)"
+        required: false
+
+jobs:
+    log-expected:
+        name: Log Expected Page State
+        runs-on: ubuntu-latest
+        permissions:
+            issues: read
+        env:
+            GH_TOKEN: ${{ github.token }}
+        steps:
+            - name: Checkout automation-workflow
+              uses: actions/checkout@v4
+              with:
+                  repository: EnclaveLLC/automation-workflow
+                  path: EnclaveLLC/automation-workflow
+                  token: ${{ github.token }}
+
+            - name: Parse issue body
+              id: parse
+              run: |
+                  ISSUE_BODY=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }} --jq '.body')
+                  ISSUE_LABEL=$(gh issue view "${{ inputs.issue_number }}" --repo "${{ github.repository }}" --json labels --jq '.labels[0].name // ""')
+                  ISSUE_COMMENTS=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments)
+                  export ISSUE_BODY ISSUE_LABEL ISSUE_COMMENTS
+                  node EnclaveLLC/automation-workflow/scripts/parser/issue-parser.js
+
+            - name: Fetch assignee
+              id: assignee
+              if: steps.parse.outputs.linear_id != ''
+              env:
+                  LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+                  LINEAR_ID: ${{ steps.parse.outputs.linear_id }}
+                  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+                  SUPABASE_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+              run: |
+                  node -e "
+                  async function main() {
+                    const res = await fetch('https://api.linear.app/graphql', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': process.env.LINEAR_API_KEY },
+                      body: JSON.stringify({
+                        query: 'query(\$id: String!) { issue(id: \$id) { assignee { name email } } }',
+                        variables: { id: process.env.LINEAR_ID },
+                      }),
+                    });
+                    const json = await res.json();
+                    if (json.errors) {
+                      console.error('Linear API error:', JSON.stringify(json.errors));
+                      process.exit(1);
+                    }
+                    const assignee = (json.data && json.data.issue && json.data.issue.assignee) || null;
+                    const name = assignee ? assignee.name : '';
+                    const email = assignee ? assignee.email : '';
+
+                    let userId = '';
+                    if (email && process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+                      const userRes = await fetch(\`\${process.env.SUPABASE_URL}/rest/v1/users?email=ilike.\${encodeURIComponent(email)}&select=id\`, {
+                        headers: { apikey: process.env.SUPABASE_KEY, Authorization: \`Bearer \${process.env.SUPABASE_KEY}\` },
+                      });
+                      if (!userRes.ok) {
+                        console.error('Supabase users lookup failed:', userRes.status, await userRes.text());
+                        process.exit(1);
+                      }
+                      const rows = await userRes.json();
+                      userId = rows.length ? rows[0].id : '';
+                    }
+
+                    console.log(\`assignee: \${name} <\${email}> user_id=\${userId || '(no match)'}\`);
+                    require('fs').appendFileSync(process.env.GITHUB_OUTPUT, \`assignee_name=\${name}\nassignee_email=\${email}\nuser_id=\${userId}\n\`);
+                  }
+                  main().catch(err => { console.error(err); process.exit(1); });
+                  "
+
+            - name: Log expected pages
+              env:
+                  PAGE_UPDATE_URLS: ${{ steps.parse.outputs.page_update_urls }}
+                  SPLIT_TEST_CONTROL_URL: ${{ steps.parse.outputs.split_test_control_url }}
+                  SPLIT_TEST_VARIATIONS: ${{ steps.parse.outputs.split_test_variations }}
+                  NEW_PAGE_URLS: ${{ steps.parse.outputs.new_page_urls }}
+                  CHECKOUT_URLS: ${{ steps.parse.outputs.checkout_urls }}
+                  WISTIA_URLS: ${{ steps.parse.outputs.wistia_urls }}
+                  BUTTON_DROP_TIME: ${{ steps.parse.outputs.button_drop_time }}
+                  LINEAR_ID: ${{ steps.parse.outputs.linear_id }}
+                  EDITED_BY: ${{ steps.assignee.outputs.user_id }}
+                  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+                  SUPABASE_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+              run: |
+                  node -e "
+                  function splitUrl(url) {
+                    try {
+                      const u = new URL(url);
+                      const segments = u.pathname.split('/').filter(Boolean);
+                      return {
+                        domain: u.hostname.replace(/^www\./, ''),
+                        slug: segments.length ? segments[segments.length - 1] : '',
+                      };
+                    } catch (e) {
+                      return { domain: '', slug: '' };
+                    }
+                  }
+
+                  async function main() {
+                    // Wistia/checkout/button-drop are attributes of whichever
+                    // funnel pages this ticket touches, not pages of their own —
+                    // one shared 'expected' payload gets attached to every page.
+                    const wistia = {};
+                    for (const w of JSON.parse(process.env.WISTIA_URLS || '[]')) {
+                      const id = splitUrl(w.url).slug;
+                      if (w.device === 'desktop') wistia['desktop-id'] = id;
+                      else if (w.device === 'mobile') wistia['mobile-id'] = id;
+                    }
+                    if (process.env.BUTTON_DROP_TIME) wistia['button-drop'] = process.env.BUTTON_DROP_TIME;
+
+                    const checkout = {};
+                    for (const c of JSON.parse(process.env.CHECKOUT_URLS || '[]')) {
+                      checkout[c.kind] = checkout[c.kind] || {};
+                      checkout[c.kind][c.pack] = c.url;
+                    }
+
+                    const expected = {};
+                    if (Object.keys(wistia).length) expected.wistia = wistia;
+                    if (Object.keys(checkout).length) expected.checkout = checkout;
+
+                    const urls = [
+                      ...JSON.parse(process.env.PAGE_UPDATE_URLS || '[]'),
+                      ...JSON.parse(process.env.NEW_PAGE_URLS || '[]'),
+                      ...(process.env.SPLIT_TEST_CONTROL_URL ? [process.env.SPLIT_TEST_CONTROL_URL] : []),
+                      ...JSON.parse(process.env.SPLIT_TEST_VARIATIONS || '[]').map(v => v.url),
+                    ];
+                    const pages = urls.map(url => ({ ...splitUrl(url), expected }));
+
+                    if (!pages.length || !Object.keys(expected).length) {
+                      console.log('No pages with expected data to log — skipping.');
+                      return;
+                    }
+                    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
+                      console.log('Supabase not configured — skipping expected log.');
+                      return;
+                    }
+
+                    const domains = [...new Set(pages.map(p => p.domain))];
+                    const domainRes = await fetch(\`\${process.env.SUPABASE_URL}/rest/v1/domains?repo=in.(\${domains.map(encodeURIComponent).join(',')})&select=id,repo\`, {
+                      headers: { apikey: process.env.SUPABASE_KEY, Authorization: \`Bearer \${process.env.SUPABASE_KEY}\` },
+                    });
+                    if (!domainRes.ok) {
+                      console.error('Supabase domains lookup failed:', domainRes.status, await domainRes.text());
+                      process.exit(1);
+                    }
+                    const domainIds = {};
+                    for (const row of await domainRes.json()) domainIds[row.repo] = row.id;
+
+                    const rows = pages
+                      .filter(p => domainIds[p.domain])
+                      .map(p => ({
+                        domain_id: domainIds[p.domain],
+                        page_slug: p.slug,
+                        expected: p.expected,
+                        linear_id: process.env.LINEAR_ID || null,
+                        edited_by: process.env.EDITED_BY || null,
+                      }));
+
+                    if (!rows.length) {
+                      console.log('No pages matched a known domain — skipping.');
+                      return;
+                    }
+
+                    const insertRes = await fetch(\`\${process.env.SUPABASE_URL}/rest/v1/expected\`, {
+                      method: 'POST',
+                      headers: {
+                        apikey: process.env.SUPABASE_KEY,
+                        Authorization: \`Bearer \${process.env.SUPABASE_KEY}\`,
+                        'Content-Type': 'application/json',
+                        Prefer: 'return=minimal',
+                      },
+                      body: JSON.stringify(rows),
+                    });
+                    if (!insertRes.ok) {
+                      console.error('Supabase expected insert failed:', insertRes.status, await insertRes.text());
+                      process.exit(1);
+                    }
+                    console.log(\`Inserted \${rows.length} expected row(s):\`, JSON.stringify(rows, null, 2));
+                  }
+                  main().catch(err => { console.error(err); process.exit(1); });
+                  "

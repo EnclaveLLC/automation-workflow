@@ -131,12 +131,15 @@ function findVariations(tables) {
 }
 
 // Finds checkout URLs anywhere in the body — inside a table or a plain
-// paragraph — by matching the "go.<site>/products/<slug>" URL shape
-// directly, rather than relying on table structure. Keyed off the
-// "#-pack" segment found in the URL itself (falls back to the full URL
-// if no pack size is present).
+// paragraph — by matching the "go.<site>/products/<slug>" or
+// "go.<site>/checkout/<slug>" URL shape directly, rather than relying on
+// table structure. Keyed off the "#-pack" segment found in the URL itself
+// (falls back to the full URL if no pack size is present). `kind` is "sub"
+// when the slug carries a "-sub-" (or leading/trailing "sub") segment,
+// "ot" (one-time) otherwise — that's the only signal these URLs give.
 function findCheckoutUrls(rawBody) {
-  const urlRegex = /https?:\/\/go\.[^\s<>()|[\]]+\/products\/[^\s<>()|[\]]+/gi;
+  const urlRegex = /https?:\/\/go\.[^\s<>()|[\]]+\/(?:products|checkout)\/[^\s<>()|[\]]+/gi;
+  const subRegex = /(?:^|[-_/])sub(?:[-_/]|$)/i;
   const seen = new Set();
   const checkoutUrls = [];
 
@@ -148,8 +151,9 @@ function findCheckoutUrls(rawBody) {
 
     const packMatch = url.match(/(\d+)-pack/i);
     const pack = packMatch ? `${packMatch[1]}-pack` : url;
+    const kind = subRegex.test(url) ? 'sub' : 'ot';
 
-    checkoutUrls.push({ pack, url });
+    checkoutUrls.push({ pack, kind, url });
   }
 
   return checkoutUrls;
