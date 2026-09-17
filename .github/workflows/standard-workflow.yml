@@ -16,6 +16,10 @@ on:
       issue_number:
         required: true
         type: number
+      event_action:
+        required: false
+        type: string
+        default: ''
 
 jobs:
 
@@ -76,3 +80,11 @@ jobs:
             contents: write
             issues: write
             pull-requests: write
+
+    issue-closed:
+        name: Issue Closed
+        if: inputs.event_action == 'closed'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Echo issue closed
+              run: echo "Issue #${{ inputs.issue_number }} was closed"

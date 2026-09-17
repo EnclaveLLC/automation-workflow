@@ -1,0 +1,25 @@
+<!-- linear:table-colwidths:584 -->
+| Page Update |
+| -- |
+| [https://nervebreakthrough.com/pages/sf-vslfb-v1](<https://nervebreakthrough.com/pages/sf-vslfb-v1>) |
+| -- |
+| [https://nervebreakthrough.com/pages/sf-vslfb-v2](<https://nervebreakthrough.com/pages/sf-vslfb-v2>) |
+
+**✅ Update the Wistia Links of this V1 version on both desktop and mobile**
+
+**V1 - Sofon VSLFB - Previous Control before July 16** 
+
+[https://nervebreakthrough.com/pages/sf-vslfb-v1](<https://nervebreakthrough.com/pages/sf-vslfb-v1>)
+
+[Sofon VSL V3 [Talk Show + Lead 3 Control-based Kyle & James + Sped Up + High Broll and Stock Footage + HD 1600kbps 1920x1080] - Desktop](<https://konsciousketo.wistia.com/medias/uymfw62bpk>)
+[Sofon VSL V3 [Talk Show + Lead 3 Control-based Kyle & James + Sped Up + High Broll and Stock Footage + HD 1600kbps 1080x1350] - Mobile](<https://konsciousketo.wistia.com/medias/v6a67ztmmv>)
+Button Drop: 28:40 ($59)
+Thumbnail Timestamps: 58:04 - 58:19
+
+✅ **Apply the New Page Timer 5 seconds before the button drops @ 28:40 on both desktop and mobile**
+
+***Dev Reference on the Code:***
+
+<img src="https://uploads.linear.app/6a7a73a2-fb87-4abd-9186-bc34988e0a79/9201bc4b-8280-4dd5-aa1d-f17e76e9ced5/ff46e541-3d75-4661-847e-ae2135226bbf?signature=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwYXRoIjoiLzZhN2E3M2EyLWZiODctNGFiZC05MTg2LWJjMzQ5ODhlMGE3OS85MjAxYmM0Yi04MjgwLTRkZDUtYWExZC1mMTdlNzZlOWNlZDUvZmY0NmU1NDEtM2Q3NS00NjYxLTg0N2UtYWUyMTM1MjI2YmJmIiwiaWF0IjoxNzg5MTM1MDU2LCJleHAiOjE4MjA3MDU2MTZ9.y1zHFy2as0PqNW9S8tBc3jvHi2LtuQhsCGJvn_64GEE " alt="image (93).png" width="1562" data-linear-height="540" />
+
+**No changes on other sections, including the cart links, just the Wistia and Button Drop*

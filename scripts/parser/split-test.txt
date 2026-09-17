@@ -1,0 +1,10 @@
+<!-- linear:table-colwidths:676 -->
+| Control Page URL |
+| -- |
+| [https://testosteronerocket.com/pages/spg-vslfb-ext/](<https://testosteronerocket.com/pages/spg-vslfb-ext/>) |
+
+<!-- linear:table-colwidths:188,486 -->
+| Page Variations | Page URL |
+| -- | -- |
+| Control Duplicate | [https://testosteronerocket.com/pages/spg-vslfb-ext-dup/](<https://testosteronerocket.com/pages/spg-vslfb-ext-dup/>) |
+| Version 1 | [https://testosteronerocket.com/pages/spg-vslfb-ext-v1/](<https://testosteronerocket.com/pages/spg-vslfb-ext-v1/>) |
