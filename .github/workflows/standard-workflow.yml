@@ -23,6 +23,11 @@ on:
     secrets:
       LINEAR_API_KEY:
         required: false
+      SUPABASE_URL:
+        required: false
+      SUPABASE_SECRET_KEY:
+        description: "Server-side Supabase secret key (sb_secret_...) — needed because the domains table has no anon/publishable read access (see EnclaveLLC/enclave-vsl-hub's enable_rls migration)"
+        required: false
 
 jobs:
 
@@ -94,9 +99,10 @@ jobs:
             GH_TOKEN: ${{ github.token }}
         outputs:
             linear_id: ${{ steps.parse.outputs.linear_id }}
-            pages: ${{ steps.pages.outputs.pages }}
+            pages: ${{ steps.domain_ids.outputs.pages }}
             assignee_name: ${{ steps.assignee.outputs.assignee_name }}
             assignee_email: ${{ steps.assignee.outputs.assignee_email }}
+            user_id: ${{ steps.assignee_user.outputs.user_id }}
         steps:
             - name: Checkout automation-workflow
               uses: actions/checkout@v4
@@ -148,6 +154,37 @@ jobs:
                   main().catch(err => { console.error(err); process.exit(1); });
                   "
 
+            - name: Fetch assignee user ID
+              id: assignee_user
+              if: steps.assignee.outputs.assignee_email != ''
+              env:
+                  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+                  SUPABASE_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+                  ASSIGNEE_EMAIL: ${{ steps.assignee.outputs.assignee_email }}
+              run: |
+                  node -e "
+                  async function main() {
+                    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) return;
+
+                    const email = encodeURIComponent(process.env.ASSIGNEE_EMAIL);
+                    const res = await fetch(\`\${process.env.SUPABASE_URL}/rest/v1/users?email=ilike.\${email}&select=id\`, {
+                      headers: {
+                        apikey: process.env.SUPABASE_KEY,
+                        Authorization: \`Bearer \${process.env.SUPABASE_KEY}\`,
+                      },
+                    });
+                    if (!res.ok) {
+                      console.error('Supabase users lookup failed:', res.status, await res.text());
+                      process.exit(1);
+                    }
+                    const rows = await res.json();
+                    const userId = rows.length ? rows[0].id : '';
+                    console.log(\`user_id: \${userId || '(no match)'}\`);
+                    require('fs').appendFileSync(process.env.GITHUB_OUTPUT, \`user_id=\${userId}\n\`);
+                  }
+                  main().catch(err => { console.error(err); process.exit(1); });
+                  "
+
             - name: Restructure pages
               id: pages
               env:
@@ -160,28 +197,76 @@ jobs:
                   WISTIA_URLS: ${{ steps.parse.outputs.wistia_urls }}
               run: |
                   node -e "
+                  function splitUrl(url) {
+                    try {
+                      const u = new URL(url);
+                      const segments = u.pathname.split('/').filter(Boolean);
+                      return {
+                        domain: u.hostname.replace(/^www\./, ''),
+                        slug: segments.length ? segments[segments.length - 1] : '',
+                      };
+                    } catch (e) {
+                      return { domain: '', slug: '' };
+                    }
+                  }
+
                   const pages = [];
                   const newPageType = process.env.ISSUE_TYPE === 'page_duplicate' ? 'page_duplicate' : 'new_page';
 
                   for (const url of JSON.parse(process.env.PAGE_UPDATE_URLS || '[]')) {
-                    pages.push({ type: 'page_update', url });
+                    pages.push({ type: 'page_update', ...splitUrl(url) });
                   }
                   for (const url of JSON.parse(process.env.NEW_PAGE_URLS || '[]')) {
-                    pages.push({ type: newPageType, url });
+                    pages.push({ type: newPageType, ...splitUrl(url) });
                   }
                   if (process.env.SPLIT_TEST_CONTROL_URL) {
-                    pages.push({ type: 'split_test_control', url: process.env.SPLIT_TEST_CONTROL_URL });
+                    pages.push({ type: 'split_test_control', ...splitUrl(process.env.SPLIT_TEST_CONTROL_URL) });
                   }
                   for (const v of JSON.parse(process.env.SPLIT_TEST_VARIATIONS || '[]')) {
-                    pages.push({ type: 'split_test_variation', name: v.name, url: v.url });
+                    pages.push({ type: 'split_test_variation', name: v.name, ...splitUrl(v.url) });
                   }
                   for (const c of JSON.parse(process.env.CHECKOUT_URLS || '[]')) {
-                    pages.push({ type: 'checkout', pack: c.pack, url: c.url });
+                    pages.push({ type: 'checkout', pack: c.pack, ...splitUrl(c.url) });
                   }
                   for (const w of JSON.parse(process.env.WISTIA_URLS || '[]')) {
-                    pages.push({ type: 'wistia', device: w.device, url: w.url });
+                    pages.push({ type: 'wistia', device: w.device, ...splitUrl(w.url) });
                   }
 
                   console.log(JSON.stringify(pages, null, 2));
                   require('fs').appendFileSync(process.env.GITHUB_OUTPUT, \`pages=\${JSON.stringify(pages)}\n\`);
+                  "
+
+            - name: Attach domain IDs
+              id: domain_ids
+              env:
+                  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+                  SUPABASE_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+                  PAGES: ${{ steps.pages.outputs.pages }}
+              run: |
+                  node -e "
+                  async function main() {
+                    const pages = JSON.parse(process.env.PAGES || '[]');
+                    const domains = [...new Set(pages.map(p => p.domain).filter(Boolean))];
+
+                    const domainIds = {};
+                    if (domains.length && process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+                      const filter = domains.map(encodeURIComponent).join(',');
+                      const res = await fetch(\`\${process.env.SUPABASE_URL}/rest/v1/domains?repo=in.(\${filter})&select=id,repo\`, {
+                        headers: {
+                          apikey: process.env.SUPABASE_KEY,
+                          Authorization: \`Bearer \${process.env.SUPABASE_KEY}\`,
+                        },
+                      });
+                      if (!res.ok) {
+                        console.error('Supabase domains lookup failed:', res.status, await res.text());
+                        process.exit(1);
+                      }
+                      for (const row of await res.json()) domainIds[row.repo] = row.id;
+                    }
+
+                    const withDomainIds = pages.map(p => ({ ...p, domain_id: domainIds[p.domain] || null }));
+                    console.log(JSON.stringify(withDomainIds, null, 2));
+                    require('fs').appendFileSync(process.env.GITHUB_OUTPUT, \`pages=\${JSON.stringify(withDomainIds)}\n\`);
+                  }
+                  main().catch(err => { console.error(err); process.exit(1); });
                   "
