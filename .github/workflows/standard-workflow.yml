@@ -85,6 +85,21 @@ jobs:
         name: Issue Closed
         if: inputs.event_action == 'closed'
         runs-on: ubuntu-latest
+        permissions:
+            issues: read
+        env:
+            GH_TOKEN: ${{ github.token }}
         steps:
-            - name: Echo issue closed
-              run: 'echo "Issue #${{ inputs.issue_number }} was closed"'
+            - name: Checkout automation-workflow
+              uses: actions/checkout@v4
+              with:
+                  repository: EnclaveLLC/automation-workflow
+                  path: EnclaveLLC/automation-workflow
+                  token: ${{ github.token }}
+
+            - name: Parse issue body
+              run: |
+                  ISSUE_BODY=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }} --jq '.body')
+                  ISSUE_LABEL=$(gh issue view "${{ inputs.issue_number }}" --repo "${{ github.repository }}" --json labels --jq '.labels[0].name // ""')
+                  export ISSUE_BODY ISSUE_LABEL
+                  node EnclaveLLC/automation-workflow/scripts/parser/issue-parser.js
