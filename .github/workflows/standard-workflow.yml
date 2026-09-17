@@ -87,4 +87,4 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Echo issue closed
-              run: echo "Issue #${{ inputs.issue_number }} was closed"
+              run: 'echo "Issue #${{ inputs.issue_number }} was closed"'
