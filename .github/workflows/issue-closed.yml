@@ -94,6 +94,7 @@ jobs:
 
             - name: Log expected pages
               env:
+                  ISSUE_TYPE: ${{ steps.parse.outputs.issue_type }}
                   PAGE_UPDATE_URLS: ${{ steps.parse.outputs.page_update_urls }}
                   SPLIT_TEST_CONTROL_URL: ${{ steps.parse.outputs.split_test_control_url }}
                   SPLIT_TEST_VARIATIONS: ${{ steps.parse.outputs.split_test_variations }}
@@ -175,6 +176,7 @@ jobs:
                       .map(p => ({
                         domain_id: domainIds[p.domain],
                         page_slug: p.slug,
+                        type: process.env.ISSUE_TYPE || null,
                         expected: p.expected,
                         linear_id: process.env.LINEAR_ID || null,
                         edited_by: process.env.EDITED_BY || null,
