@@ -187,6 +187,38 @@ jobs:
                       return;
                     }
 
+                    function deepEqual(a, b) {
+                      if (a === b) return true;
+                      if (Array.isArray(a) || Array.isArray(b)) {
+                        return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => deepEqual(v, b[i]));
+                      }
+                      if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+                      const aKeys = Object.keys(a);
+                      return aKeys.length === Object.keys(b).length
+                        && aKeys.every(k => Object.prototype.hasOwnProperty.call(b, k) && deepEqual(a[k], b[k]));
+                    }
+
+                    const slugs = [...new Set(rows.map(r => r.page_slug))];
+                    const existingRes = await fetch(\`\${process.env.SUPABASE_URL}/rest/v1/expected?page_slug=in.(\${slugs.map(encodeURIComponent).join(',')})&select=domain_id,page_slug,expected\`, {
+                      headers: { apikey: process.env.SUPABASE_KEY, Authorization: \`Bearer \${process.env.SUPABASE_KEY}\` },
+                    });
+                    if (!existingRes.ok) {
+                      console.error('Supabase expected lookup failed:', existingRes.status, await existingRes.text());
+                      process.exit(1);
+                    }
+                    const existing = await existingRes.json();
+
+                    const newRows = rows.filter(r => {
+                      const isDuplicate = existing.some(e => e.domain_id === r.domain_id && e.page_slug === r.page_slug && deepEqual(e.expected, r.expected));
+                      if (isDuplicate) console.log(\`Skipping \${r.page_slug} — expected data unchanged since last log.\`);
+                      return !isDuplicate;
+                    });
+
+                    if (!newRows.length) {
+                      console.log('All pages already have this exact expected data logged — nothing to insert.');
+                      return;
+                    }
+
                     const insertRes = await fetch(\`\${process.env.SUPABASE_URL}/rest/v1/expected\`, {
                       method: 'POST',
                       headers: {
@@ -195,13 +227,13 @@ jobs:
                         'Content-Type': 'application/json',
                         Prefer: 'return=minimal',
                       },
-                      body: JSON.stringify(rows),
+                      body: JSON.stringify(newRows),
                     });
                     if (!insertRes.ok) {
                       console.error('Supabase expected insert failed:', insertRes.status, await insertRes.text());
                       process.exit(1);
                     }
-                    console.log(\`Inserted \${rows.length} expected row(s):\`, JSON.stringify(rows, null, 2));
+                    console.log(\`Inserted \${newRows.length} expected row(s):\`, JSON.stringify(newRows, null, 2));
                   }
                   main().catch(err => { console.error(err); process.exit(1); });
                   "
