@@ -49,6 +49,8 @@ jobs:
           fetch-depth: 0
           # Full history for git diff, but skip old blob contents (images/videos); HEAD's files are still fetched
           filter: blob:none
+          # Only git diff runs here, so skip writing the working tree (root files + .github only)
+          sparse-checkout: .github
 
       # ---------------------------------------------------------
       # Check for image changes — end workflow early if none
@@ -97,6 +99,16 @@ jobs:
           fetch-depth: 0
           # Full history for git diff, but skip old blob contents (images/videos); HEAD's files are still fetched
           filter: blob:none
+          # Skip media this job never reads — it only converts/uploads png/jpg/jpeg/webp.
+          # Don't add those four here, or conversion and S3 upload will silently find no files.
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !*.gif
+            !*.svg
+            !*.ico
+            !*.avif
+            !*.mp4
 
       # ---------------------------------------------------------
       # Verify required secrets
