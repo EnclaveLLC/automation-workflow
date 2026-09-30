@@ -51,8 +51,6 @@ jobs:
               env:
                   LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
                   LINEAR_ID: ${{ steps.parse.outputs.linear_id }}
-                  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-                  SUPABASE_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
               run: |
                   node -e "
                   async function main() {
@@ -73,21 +71,8 @@ jobs:
                     const name = assignee ? assignee.name : '';
                     const email = assignee ? assignee.email : '';
 
-                    let userId = '';
-                    if (email && process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
-                      const userRes = await fetch(\`\${process.env.SUPABASE_URL}/rest/v1/users?email=ilike.\${encodeURIComponent(email)}&select=id\`, {
-                        headers: { apikey: process.env.SUPABASE_KEY, Authorization: \`Bearer \${process.env.SUPABASE_KEY}\` },
-                      });
-                      if (!userRes.ok) {
-                        console.error('Supabase users lookup failed:', userRes.status, await userRes.text());
-                        process.exit(1);
-                      }
-                      const rows = await userRes.json();
-                      userId = rows.length ? rows[0].id : '';
-                    }
-
-                    console.log(\`assignee: \${name} <\${email}> user_id=\${userId || '(no match)'}\`);
-                    require('fs').appendFileSync(process.env.GITHUB_OUTPUT, \`assignee_name=\${name}\nassignee_email=\${email}\nuser_id=\${userId}\n\`);
+                    console.log(\`assignee: \${name} <\${email || '(none)'}>\`);
+                    require('fs').appendFileSync(process.env.GITHUB_OUTPUT, \`assignee_name=\${name}\nassignee_email=\${email}\n\`);
                   }
                   main().catch(err => { console.error(err); process.exit(1); });
                   "
@@ -103,7 +88,7 @@ jobs:
                   WISTIA_URLS: ${{ steps.parse.outputs.wistia_urls }}
                   BUTTON_DROP_TIME: ${{ steps.parse.outputs.button_drop_time }}
                   LINEAR_ID: ${{ steps.parse.outputs.linear_id }}
-                  EDITED_BY: ${{ steps.assignee.outputs.user_id }}
+                  EDITED_BY: ${{ steps.assignee.outputs.assignee_email }}
                   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
                   SUPABASE_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
               run: |
