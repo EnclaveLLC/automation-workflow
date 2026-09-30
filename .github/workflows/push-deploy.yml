@@ -3,6 +3,7 @@
 # Triggered on direct pushes. Lean pipeline:
 #   1a. FTP deploy  ─┐ parallel
 #   1b. AWS deploy  ─┘
+#   2.  WebOps webhook (after deploys)
 # -----------------------------------------------------------------------------
 name: Push Deploy
 
@@ -18,6 +19,8 @@ on:
       AWS_ACCESS_KEY_ID:
         required: false
       AWS_SECRET_ACCESS_KEY:
+        required: false
+      WEBOPS_WEBHOOK_SECRET:
         required: false
 
 jobs:
@@ -48,3 +51,52 @@ jobs:
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Notify enclave-webops dashboard (runs after deploys)
+  # Sends a signed `push` event so the dashboard revalidates this repo.
+  # Non-fatal: a webhook failure only logs a warning.
+  # ---------------------------------------------------------------------------
+  trigger-webhook:
+    name: Trigger WebOps Webhook
+    needs: [deploy-ftp, deploy-aws]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send signed push webhook
+        env:
+          WEBHOOK_URL:    https://enclave-webops.vercel.app/api/webhook/github
+          WEBHOOK_SECRET: ${{ secrets.WEBOPS_WEBHOOK_SECRET }}
+          REPO_NAME:      ${{ github.event.repository.name }}
+          REPO_FULL:      ${{ github.repository }}
+          REPO_OWNER:     ${{ github.repository_owner }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [ -z "$WEBHOOK_SECRET" ]; then
+            echo "::warning::WEBOPS_WEBHOOK_SECRET not set — skipping webhook"
+            exit 0
+          fi
+
+          BODY=$(node -e "
+            const e = process.env;
+            process.stdout.write(JSON.stringify({
+              ref: 'refs/heads/' + e.DEFAULT_BRANCH,
+              repository: {
+                name: e.REPO_NAME,
+                full_name: e.REPO_FULL,
+                default_branch: e.DEFAULT_BRANCH,
+                owner: { login: e.REPO_OWNER },
+              },
+            }));
+          ")
+          SIG="sha256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | awk '{print $NF}')"
+
+          RESPONSE=$(curl -sS -w '\n%{http_code}' --max-time 30 -X POST "$WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -H 'X-GitHub-Event: push' \
+            -H "X-Hub-Signature-256: $SIG" \
+            --data-binary "$BODY") || { echo "::warning::Webhook request failed"; exit 0; }
+
+          STATUS=$(echo "$RESPONSE" | tail -n1)
+          echo "HTTP $STATUS: $(echo "$RESPONSE" | sed '$d')"
+          [ "$STATUS" = "200" ] || echo "::warning::Webhook returned HTTP $STATUS"
