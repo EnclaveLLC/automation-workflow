@@ -262,6 +262,9 @@ jobs:
       - name: Commit changes
         run: |
           set -euo pipefail
+          # Keep helper checkouts out of the commit (they'd land as stray gitlinks)
+          rm -rf EnclaveLLC/automation-workflow
+          git rm -r --cached --ignore-unmatch -q EnclaveLLC/automation-workflow
           git add .
           git commit -m "${{ github.event.issue.title }}"
 
@@ -522,6 +525,9 @@ jobs:
       - name: Commit changes
         run: |
           set -euo pipefail
+          # Keep helper checkouts out of the commit (they'd land as stray gitlinks)
+          rm -rf EnclaveLLC/automation-workflow
+          git rm -r --cached --ignore-unmatch -q EnclaveLLC/automation-workflow
           git add .
           git commit -m "${{ github.event.issue.title }}"
 
