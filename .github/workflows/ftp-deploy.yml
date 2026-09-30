@@ -39,6 +39,8 @@ jobs:
           fetch-depth: 0
           # Full history for git diff, but skip old blob contents (images/videos); HEAD's files are still fetched
           filter: blob:none
+          # Only git diff runs here, so skip writing the working tree (root files + .github only)
+          sparse-checkout: .github
 
       # ---------------------------------------------------------
       # Check for uploadable file changes
@@ -88,6 +90,21 @@ jobs:
           fetch-depth: 0
           # Full history for git diff, but skip old blob contents (images/videos); HEAD's files are still fetched
           filter: blob:none
+          # Skip media files — nothing here reads them and FTP upload excludes them.
+          # Keep this list identical to the FTP upload `exclude` media globs below,
+          # otherwise the FTP action sees files as missing and deletes them on the server.
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !*.jpg
+            !*.jpeg
+            !*.png
+            !*.gif
+            !*.webp
+            !*.svg
+            !*.ico
+            !*.avif
+            !*.mp4
 
       # ---------------------------------------------------------
       # Verify required secrets
