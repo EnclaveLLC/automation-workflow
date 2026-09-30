@@ -33,10 +33,12 @@ jobs:
       # Checkout code
       # ---------------------------------------------------------
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0
+          # Full history for git diff, but skip old blob contents (images/videos); HEAD's files are still fetched
+          filter: blob:none
 
       # ---------------------------------------------------------
       # Check for uploadable file changes
@@ -80,10 +82,12 @@ jobs:
       # Checkout code
       # ---------------------------------------------------------
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0
+          # Full history for git diff, but skip old blob contents (images/videos); HEAD's files are still fetched
+          filter: blob:none
 
       # ---------------------------------------------------------
       # Verify required secrets
