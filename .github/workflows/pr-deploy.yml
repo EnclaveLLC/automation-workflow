@@ -341,12 +341,12 @@ jobs:
               try {
                 const url = new URL(u);
                 const host = url.hostname.replace(/^www\./, '');
-                const slug = url.pathname.replace(/^\/+|\/+\$/g, '');
+                const slug = url.pathname.replace(/^\/+|\/+\$/g, '').replace(/^pages\//, '');
                 return slug ? 'https://enclave-webops.vercel.app/vsl/' + host + '/' + slug : '';
               } catch { return ''; }
             }).filter(Boolean))];
             if (!links.length) { process.stdout.write(body); process.exit(0); }
-            const block = '<!-- webops-links -->\n### WebOps Dashboard:\nTo verify the following updates/changes, please go to:\n' +links.map(l => '- ' + l).join('\n') + '\n<!-- /webops-links -->';
+            const block = '<!-- webops-links -->\n### Verification:\nReview the updated pages:\n' +links.map(l => '- ' + l).join('\n') + '\n<!-- /webops-links -->';
             body = body.replace(/\n*<!-- webops-links -->[\s\S]*?<!-- \/webops-links -->/, '');
             body = body.replace(/(<!-- \/deployment-details -->)/, '\$1\n' + block);
             process.stdout.write(body);
