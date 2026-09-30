@@ -38,8 +38,7 @@ identical marketing/VSL landing-page sites:
 5. Merging that PR (or pushing directly to main) triggers deploy:
    [push-deploy.yml](.github/workflows/push-deploy.yml) (direct push, lean —
    just FTP + AWS, no QA) or [pr-deploy.yml](.github/workflows/pr-deploy.yml)
-   (merged PR, full pipeline — FTP + AWS in parallel → pre-QA → post-QA →
-   comment marked "Completed").
+   (merged PR — FTP + AWS in parallel → comment marked "Completed"; no QA).
 6. [claude.yml](.github/workflows/claude.yml) wires `@claude` mentions /
    `claude`-labeled issues to `anthropics/claude-code-action@v1`, governed by
    [prompts/claude-system-prompt.md](prompts/claude-system-prompt.md) — see
@@ -78,13 +77,13 @@ workflows in this repo, never directly by a caller repo's wrapper.
 |---|---|---|---|
 | `claude.yml` | — | `CLAUDE_CODE_OAUTH_TOKEN` | Runs `claude-code-action` with `prompts/claude-system-prompt.md`, model `claude-opus-4-5`, `--max-turns 100`. |
 | `push-deploy.yml` | — | `FTP_*`, `AWS_*` | Direct-push pipeline: `ftp-deploy.yml` + `aws-deploy.yml` in parallel, no QA. |
-| `pr-deploy.yml` | `pr_number`, `pr_title`, `pr_body` | `FTP_*`, `AWS_*`, `SUPABASE_URL/SECRET_KEY` (opt) | Merged-PR pipeline: status comment → parse PR body (`scripts/pr-deploy/parse-pr.js`) → deploy-ftp + deploy-aws + update-supabase-split-test (all parallel, after PR info) → pre-QA (after deploys) → post-QA → mark comment "Completed". Also fetches the PR's labels (`pr_labels` output) via `gh pr view`. |
+| `pr-deploy.yml` | `pr_number`, `pr_title`, `pr_body` | `FTP_*`, `AWS_*`, `SUPABASE_URL/SECRET_KEY` (opt) | Merged-PR pipeline: status comment → parse PR body (`scripts/pr-deploy/parse-pr.js`) → deploy-ftp + deploy-aws + update-supabase-split-test (all parallel, after PR info) → mark Deployment row + comment "Completed" (after deploys). No QA. Also fetches the PR's labels (`pr_labels` output) via `gh pr view`. |
 | `ftp-deploy.yml` | — | `FTP_SERVER/USERNAME/PASSWORD` | Diffs changed web files, rewrites `<img>`/`srcset` to CloudFront `.webp` (`scripts/ftp_deploy/replace-img.js`), uploads via `FTP-Deploy-Action`. |
 | `aws-deploy.yml` | — | `AWS_ACCESS_KEY_ID/SECRET_ACCESS_KEY` | Converts changed images to `.webp` via `sharp`, syncs to `s3://cdn-konscious/<repo>/…`, deletes removed originals. |
 | `supabase-split-test.yml` | `pr_labels`, `test_urls`, `linear_id` (opt) | `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Only runs when `pr_labels` contains `Split Test On`/`Off`. Looks up `domain_id` from the Supabase `domains` table (matched on `repo`), derives control/variation page slugs from `test_urls` (first URL = control), and inserts a row into `split_test` (`scripts/pr-deploy/update-supabase-split-test.js`). Uses `SUPABASE_SECRET_KEY` (not a publishable/anon key) because `domains` has no anon read grant — see EnclaveLLC/enclave-vsl-hub's `enable_rls` migration, which deliberately revoked it after the anon key was found to be able to wipe the table. |
 | `notion-parse.yml` | `repo_name` | `NOTION_TOKEN` | Looks up the site's row in Notion (domain/GTM/pixels/checkout links/buyer/GDPR) by `URL contains repo_name`; outputs `notion_json`. |
-| `pre-qa-check.yml` | — | — | Static: every changed image < 1MB, every changed file has a recognized extension. |
-| `post-qa-check.yml` | `urls`, `gtm_id` | — | Playwright: live image weight, CDN host check, `noindex,nofollow`, GTM container ID present. |
+| `pre-qa-check.yml` | — | — | **Unused** (removed from `pr-deploy.yml`). Static: every changed image < 1MB, every changed file has a recognized extension. |
+| `post-qa-check.yml` | `urls`, `gtm_id` | — | **Unused** (removed from `pr-deploy.yml`). Playwright: live image weight, CDN host check, `noindex,nofollow`, GTM container ID present. |
 | `new-page.yml` | `issue_number` | — | Parses issue table, scaffolds `index.html`, branch `new-page/<slug>`. |
 | `page-update.yml` | `issue_number` | — | Same parse/branch as new-page but verifies path **exists**, no scaffolding, branch `page-update/`. |
 | `page-duplicate.yml` | `issue_number` | `NOTION_TOKEN`, `CROSS_REPO_APP_ID/PRIVATE_KEY` (opt, cross-repo dup) | Largest workflow: parses Reference/New/CTA/Search-Replace tables (`scripts/page_duplicate/parse-issue.js`), `cp -R`s the folder (optionally from a sibling repo via GitHub App token), builds CTA pairs (`build_cta_pairs.js`), applies replacements (`general/search_replace.js`), opens the PR directly. |
