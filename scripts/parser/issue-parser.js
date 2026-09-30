@@ -131,16 +131,16 @@ function findVariations(tables) {
 }
 
 // Finds checkout URLs anywhere in the body — inside a table or a plain
-// paragraph — by matching either the "go.<site>/products|checkout/<slug>"
+// paragraph — by matching either the "go|get.<site>/products|checkout/<slug>"
 // shape or a ClickBank hoplink ("<vendor>.pay.clickbank.net/..."). For
-// go.<site> links, `kind` is "sub" when the slug carries a "-sub-" (or
+// go.<site>/get.<site> links, `kind` is "sub" when the slug carries a "-sub-" (or
 // leading/trailing "sub") segment, "ot" (one-time) otherwise, and `pack` is
 // the "#-pack" segment found in the URL (falls back to the full URL if
 // absent). ClickBank hoplinks carry no pack info at all — cbitems is an
 // internal item id, not a pack size — so those get `kind: "cb"` and `pack`
 // is just the 0-based order the links appear in the body.
 function findCheckoutUrls(rawBody) {
-  const urlRegex = /https?:\/\/go\.[^\s<>()|[\]]+\/(?:products|checkout)\/[^\s<>()|[\]]+|https?:\/\/[^\s<>()|[\]]+\.pay\.clickbank\.net\/[^\s<>()|[\]]*/gi;
+  const urlRegex = /https?:\/\/(?:go|get)\.[^\s<>()|[\]]+\/(?:products|checkout)\/[^\s<>()|[\]]+|https?:\/\/[^\s<>()|[\]]+\.pay\.clickbank\.net\/[^\s<>()|[\]]*/gi;
   const subRegex = /(?:^|[-_/])sub(?:[-_/]|$)/i;
   const clickbankRegex = /\.pay\.clickbank\.net\//i;
   const seen = new Set();
