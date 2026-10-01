@@ -181,7 +181,9 @@ function findWistiaUrls(rawBody) {
   for (const line of rawBody.split('\n')) {
     const matches = line.match(urlRegex) || [];
     for (const match of matches) {
-      const url = match.trim();
+      // Trim anything after the media id (e.g. `/manage`, `?foo`) so the
+      // last path segment is always the id — issue-closed.yml reads it that way.
+      const url = match.trim().replace(/(\/medias\/[^/?#]+).*$/, '$1');
       if (seen.has(url)) continue;
       seen.add(url);
 
