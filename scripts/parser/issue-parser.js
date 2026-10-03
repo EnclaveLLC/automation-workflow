@@ -140,7 +140,9 @@ function findVariations(tables) {
 // internal item id, not a pack size — so those get `kind: "cb"` and `pack`
 // is just the 0-based order the links appear in the body.
 function findCheckoutUrls(rawBody) {
-  const urlRegex = /https?:\/\/(?:go|get)\.[^\s<>()|[\]]+\/(?:products|checkout)\/[^\s<>()|[\]]+|https?:\/\/[^\s<>()|[\]]+\.pay\.clickbank\.net\/[^\s<>()|[\]]*/gi;
+  // Any host — the checkout subdomain (go./get./pdp./…) changes over time, so
+  // key off the `/products/` or `/checkout/` path instead.
+  const urlRegex = /https?:\/\/[^\s<>()|[\]]+?\/(?:products|checkout)\/[^\s<>()|[\]]+|https?:\/\/[^\s<>()|[\]]+\.pay\.clickbank\.net\/[^\s<>()|[\]]*/gi;
   const subRegex = /(?:^|[-_/])sub(?:[-_/]|$)/i;
   const clickbankRegex = /\.pay\.clickbank\.net\//i;
   const seen = new Set();
