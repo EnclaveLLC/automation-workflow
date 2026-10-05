@@ -85,7 +85,7 @@ workflows in this repo, never directly by a caller repo's wrapper.
 | `pre-qa-check.yml` | — | — | **Unused** (removed from `pr-deploy.yml`). Static: every changed image < 1MB, every changed file has a recognized extension. |
 | `post-qa-check.yml` | `urls`, `gtm_id` | — | **Unused** (removed from `pr-deploy.yml`). Playwright: live image weight, CDN host check, `noindex,nofollow`, GTM container ID present. |
 | `new-page.yml` | `issue_number` | — | Parses issue table, scaffolds `index.html`, branch `new-page/<slug>`. |
-| `page-update.yml` | `issue_number` | — | Collects every URL in the issue's first table, verifies each path **exists** (lists all missing ones on failure), then PATCHes the status comment (synced to Linear) with one WebOps dashboard link per page (`enclave-webops.vercel.app/vsl/<host>/<slug>`). No branch is created, so `/pr` doesn't apply. |
+| `page-update.yml` | `issue_number` | — | Collects every row of the `Page Update` column via `scripts/parser/issue-parser.js`, verifies each path **exists** (lists all missing ones on failure), then PATCHes the status comment (synced to Linear) with one WebOps dashboard link per page (`enclave-webops.vercel.app/vsl/<host>/<slug>`). No branch is created, so `/pr` doesn't apply. |
 | `page-duplicate.yml` | `issue_number` | `NOTION_TOKEN`, `CROSS_REPO_APP_ID/PRIVATE_KEY` (opt, cross-repo dup) | Largest workflow: parses Reference/New/CTA/Search-Replace tables (`scripts/page_duplicate/parse-issue.js`), `cp -R`s the folder (optionally from a sibling repo via GitHub App token), builds CTA pairs (`build_cta_pairs.js`), applies replacements (`general/search_replace.js`), opens the PR directly. |
 | `restart.yml` | `issue_number`, `repository` | — | Reads the issue's current trigger label, re-dispatches `standard-workflow.yml`. |
 | `standard-workflow.yml` | `label_name`, `issue_number` | `secrets: inherit` | Router: label → new-page/page-update/page-duplicate/split-test. |
@@ -108,6 +108,7 @@ never CLI flags.
 | `scripts/page_duplicate/verify.js` | **nothing currently** | Orphaned — no workflow invokes it. Leave alone unless you're deliberately re-wiring page-duplicate.yml to use it. |
 | `scripts/pr-deploy/parse-pr.js` | `pr-deploy.yml` | Extracts `### Issue` URL, `### Test URLs`, GTM, and a trailing `Resolves <LINEAR-ID>` line from the PR body; writes `/tmp/parse-pr.json`. |
 | `scripts/pr-deploy/update-supabase-split-test.js` | `supabase-split-test.yml` | Resolves `domain_id` from Supabase `domains` (by `repo`), derives page slugs from test URLs, inserts a row into `split_test` via the PostgREST API. |
+| `scripts/parser/issue-parser.js` | `issue-closed.yml`, `page-update.yml` | Shared issue-body parser: Page Update / New Page / Control Page URL / variations tables, checkout + Wistia URLs, button-drop time, Linear ID. Writes every field to `$GITHUB_OUTPUT`; exits 1 if nothing recognizable is found. |
 | `scripts/split_test/parse_issue.js` | `split-test.yml`, `split-test-check.yml` | Parses Control Page URL + Page Variations table. |
 | `scripts/split_test/add_split_test_code.js` | `split-test.yml` (type=on) | Prepends the PHP `SplitTester` block. |
 | `scripts/split_test/remove_split_test_code.js` | `split-test.yml` (type=off) | Strips the block `add_split_test_code.js` added. |
