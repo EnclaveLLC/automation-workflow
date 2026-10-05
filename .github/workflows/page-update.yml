@@ -18,8 +18,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     outputs:
-      page_url:        ${{ steps.parse.outputs.page_url }}
-      page_path:       ${{ steps.parse.outputs.page_path }}
+      page_urls:       ${{ steps.parse.outputs.page_urls }}
       comment_id:      ${{ steps.progress_comment.outputs.comment_id }}
       comment_updated: ${{ steps.parse.outputs.comment_updated }}
 
@@ -35,15 +34,17 @@ jobs:
 
       - name: Parse issue body
         id: parse
+        env:
+          COMMENT_ID: ${{ steps.progress_comment.outputs.comment_id }}
         run: |
           ISSUE_BODY=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }} --jq '.body')
           export ISSUE_BODY
 
-          # Only look inside the issue's markdown table (e.g. "Page Update" column);
-          # ignores URLs that may appear elsewhere, like in Dev Notes.
-          PAGE_URL=$(node -e "
+          # Collect every URL from the issue's first markdown table (e.g. "Page Update"
+          # column); ignores URLs that may appear elsewhere, like in Dev Notes.
+          PAGE_URLS=$(node -e "
             const lines = process.env.ISSUE_BODY.split('\n').map(l => l.replace(/\r\$/, ''));
-            let url = '';
+            const urls = [];
             for (let i = 0; i < lines.length - 1; i++) {
               const header = lines[i].trim();
               const sep = lines[i + 1].trim();
@@ -51,18 +52,16 @@ jobs:
                 for (let j = i + 2; j < lines.length; j++) {
                   const row = lines[j].trim();
                   if (row === '' || !row.startsWith('|')) break;
-                  const m = row.match(/https?:\/\/[^\]\s>)]+/);
-                  if (m) { url = m[0]; break; }
+                  urls.push(...(row.match(/https?:\/\/[^\]\s>)|]+/g) || []));
                 }
-                if (url) break;
+                if (urls.length) break;
               }
             }
-            if (!url) { process.stderr.write('No URL found\n'); process.exit(1); }
-            process.stdout.write(url);
-          " 2>/dev/null || true)
+            process.stdout.write([...new Set(urls)].join('\n'));
+          ")
 
-          if [ -z "$PAGE_URL" ]; then
-            gh api repos/${{ github.repository }}/issues/comments/$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments --jq '.[-1].id') \
+          if [ -z "$PAGE_URLS" ]; then
+            gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
               -f body="$(printf '### Page Update Failed\n\nNo URL found in the issue body.\n\nPlease follow the issue format and include a valid page URL.')"
             echo "comment_updated=true" >> "$GITHUB_OUTPUT"
@@ -70,18 +69,15 @@ jobs:
             exit 1
           fi
 
-          # Use Node URL API to reliably strip domain → pathname only
-          PAGE_PATH=$(PAGE_URL="$PAGE_URL" node -e "
-            const url = new URL(process.env.PAGE_URL);
-            process.stdout.write(url.pathname.replace(/^\//, ''));
-          ")
+          {
+            echo "page_urls<<URLS_EOF"
+            echo "$PAGE_URLS"
+            echo "URLS_EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "Parsed URLs:"
+          echo "$PAGE_URLS"
 
-          echo "page_url=$PAGE_URL"   >> "$GITHUB_OUTPUT"
-          echo "page_path=$PAGE_PATH" >> "$GITHUB_OUTPUT"
-          echo "Parsed URL:  $PAGE_URL"
-          echo "Parsed path: $PAGE_PATH"
-
-  # ── Job 2: Check path already exists ────────────────────────────────────────
+  # ── Job 2: Check paths exist ────────────────────────────────────────────────
   check-path:
     name: Check Path Availability
     needs: parse-issue
@@ -91,7 +87,7 @@ jobs:
       issues: write
     env:
       GH_TOKEN:   ${{ github.token }}
-      PAGE_PATH:  ${{ needs.parse-issue.outputs.page_path }}
+      PAGE_URLS:  ${{ needs.parse-issue.outputs.page_urls }}
       COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
     outputs:
       comment_updated: ${{ steps.check_exists.outputs.comment_updated }}
@@ -104,55 +100,65 @@ jobs:
           fetch-depth: 1
           token: ${{ github.token }}
 
-      - name: Check page already exists
+      - name: Check pages exist
         id: check_exists
         run: |
           set -euo pipefail
-          CLEAN_PATH="${PAGE_PATH#/}"
-          DISPLAY_PATH="${CLEAN_PATH:-/ (site root)}"
-          CHECK_PATH="${CLEAN_PATH:-.}"
-          if [ ! -e "$CHECK_PATH" ]; then
+          # URL → repo path (domain stripped, no leading slash)
+          PAGE_PATHS=$(node -e "
+            const urls = process.env.PAGE_URLS.split('\n').map(u => u.trim()).filter(Boolean);
+            process.stdout.write(urls.map(u => new URL(u).pathname.replace(/^\/+/, '')).join('\n'));
+          ")
+
+          MISSING=""
+          while IFS= read -r CLEAN_PATH; do
+            DISPLAY_PATH="${CLEAN_PATH:-/ (site root)}"
+            if [ ! -e "${CLEAN_PATH:-.}" ]; then
+              MISSING="${MISSING}❌ ${DISPLAY_PATH}"$'\n'
+              echo "ERROR: '$DISPLAY_PATH' does not exist."
+            else
+              echo "✅ Path '$DISPLAY_PATH' exists."
+            fi
+          done <<< "$PAGE_PATHS"
+
+          if [ -n "$MISSING" ]; then
             gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
               -X PATCH \
-              -f body="$(printf '### Page Update Failed\n\nThe following path does not exist in the repository:\n\n❌ %s\n\nPlease check the page URL and try again.' "$DISPLAY_PATH")"
+              -f body="$(printf '### Page Update Failed\n\nThe following paths do not exist in the repository:\n\n%s\nPlease check the page URLs and try again.' "$MISSING")"
             echo "comment_updated=true" >> "$GITHUB_OUTPUT"
-            echo "ERROR: '$DISPLAY_PATH' does not exist."
             exit 1
           fi
-          echo "✅ Path '$DISPLAY_PATH' exists."
 
-  # ── Job 3: Post WebOps link ─────────────────────────────────────────────────
+  # ── Job 3: Post WebOps links ────────────────────────────────────────────────
   webops-link:
-    name: Post WebOps Link
+    name: Post WebOps Links
     needs: [parse-issue, check-path]
     runs-on: ubuntu-latest
     permissions:
       issues: write
     env:
       GH_TOKEN:   ${{ github.token }}
-      PAGE_URL:   ${{ needs.parse-issue.outputs.page_url }}
+      PAGE_URLS:  ${{ needs.parse-issue.outputs.page_urls }}
       COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
 
     steps:
-      - name: Update comment — WebOps dashboard link
+      - name: Update comment — WebOps dashboard links
         run: |
           set -euo pipefail
-          WEBOPS_URL=$(node -e "
-            const url = new URL(process.env.PAGE_URL);
-            const host = url.hostname.replace(/^www\./, '');
-            const slug = url.pathname.replace(/^\/+|\/+\$/g, '').replace(/^pages\//, '');
-            process.stdout.write('https://enclave-webops.vercel.app/vsl/' + host + (slug ? '/' + slug : ''));
+          LINKS=$(node -e "
+            const urls = process.env.PAGE_URLS.split('\n').map(u => u.trim()).filter(Boolean);
+            const links = [...new Set(urls.map(u => {
+              const url = new URL(u);
+              const host = url.hostname.replace(/^www\./, '');
+              const slug = url.pathname.replace(/^\/+|\/+\$/g, '').replace(/^pages\//, '');
+              return '- https://enclave-webops.vercel.app/vsl/' + host + (slug ? '/' + slug : '');
+            }))];
+            process.stdout.write(links.join('\n'));
           ")
-
-          cat > /tmp/issue_comment.md << CMEOF
-          ### Verification:
-          Review the page:
-          - ${WEBOPS_URL}
-          CMEOF
 
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
-            -f body="$(cat /tmp/issue_comment.md)"
+            -f body="$(printf '### Verification:\nReview the updated pages:\n%s' "$LINKS")"
 
   # ── Job: Update comment on any failure ─────────────────────────────────────
   handle-failure:
