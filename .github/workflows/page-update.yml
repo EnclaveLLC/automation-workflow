@@ -20,7 +20,6 @@ jobs:
     outputs:
       page_url:        ${{ steps.parse.outputs.page_url }}
       page_path:       ${{ steps.parse.outputs.page_path }}
-      linear_id:       ${{ steps.parse.outputs.linear_id }}
       comment_id:      ${{ steps.progress_comment.outputs.comment_id }}
       comment_updated: ${{ steps.parse.outputs.comment_updated }}
 
@@ -82,14 +81,6 @@ jobs:
           echo "Parsed URL:  $PAGE_URL"
           echo "Parsed path: $PAGE_PATH"
 
-          LINEAR_ID=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }}/comments \
-            --jq '[.[] | select(.user.login | test("linear"; "i")) | .body | match("[A-Z]+-[0-9]+").string] | first // ""' \
-            2>/dev/null || echo "")
-          if [ -n "$LINEAR_ID" ]; then
-            echo "linear_id=$LINEAR_ID" >> "$GITHUB_OUTPUT"
-            echo "linear_id: $LINEAR_ID"
-          fi
-
   # ── Job 2: Check path already exists ────────────────────────────────────────
   check-path:
     name: Check Path Availability
@@ -130,96 +121,34 @@ jobs:
           fi
           echo "✅ Path '$DISPLAY_PATH' exists."
 
-  # ── Job 3: Create update branch ─────────────────────────────────────────────
-  create-branch:
-    name: Create Update Branch
+  # ── Job 3: Post WebOps link ─────────────────────────────────────────────────
+  webops-link:
+    name: Post WebOps Link
     needs: [parse-issue, check-path]
     runs-on: ubuntu-latest
     permissions:
-      contents: write
       issues: write
     env:
       GH_TOKEN:   ${{ github.token }}
-      PAGE_PATH:  ${{ needs.parse-issue.outputs.page_path }}
       PAGE_URL:   ${{ needs.parse-issue.outputs.page_url }}
-      LINEAR_ID:  ${{ needs.parse-issue.outputs.linear_id }}
       COMMENT_ID: ${{ needs.parse-issue.outputs.comment_id }}
-    outputs:
-      comment_updated: ${{ steps.verify_branch.outputs.comment_updated }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          fetch-depth: 0
-          token: ${{ github.token }}
-
-      - name: Pull latest changes
-        run: git pull origin ${{ github.event.repository.default_branch }}
-
-      - name: Set branch name
-        run: |
-          CLEAN_PATH="${PAGE_PATH#/}"
-          if [ -z "$CLEAN_PATH" ]; then
-            PAGE_SLUG="root"
-          else
-            PAGE_SLUG=$(basename "${CLEAN_PATH%/}")
-          fi
-          echo "PAGE_SLUG=${PAGE_SLUG}" >> "$GITHUB_ENV"
-          if [ -n "$LINEAR_ID" ]; then
-            echo "BRANCH_NAME=page-update/${LINEAR_ID}-${PAGE_SLUG}" >> "$GITHUB_ENV"
-          else
-            echo "BRANCH_NAME=page-update/${PAGE_SLUG}" >> "$GITHUB_ENV"
-          fi
-
-      - name: Check for existing branch
-        id: verify_branch
+      - name: Update comment — WebOps dashboard link
         run: |
           set -euo pipefail
-          if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "refs/heads/${BRANCH_NAME}"; then
-            echo "already_exists=true" >> "$GITHUB_OUTPUT"
-            echo "⚠️  Branch '$BRANCH_NAME' already exists — task already completed, skipping."
-          else
-            echo "already_exists=false" >> "$GITHUB_OUTPUT"
-            echo "✅ Branch '$BRANCH_NAME' is available."
-          fi
+          WEBOPS_URL=$(node -e "
+            const url = new URL(process.env.PAGE_URL);
+            const host = url.hostname.replace(/^www\./, '');
+            const slug = url.pathname.replace(/^\/+|\/+\$/g, '').replace(/^pages\//, '');
+            process.stdout.write('https://enclave-webops.vercel.app/vsl/' + host + (slug ? '/' + slug : ''));
+          ")
 
-      - name: Create branch
-        if: steps.verify_branch.outputs.already_exists != 'true'
-        run: |
-          set -euo pipefail
-          git checkout -b "$BRANCH_NAME"
-
-      - name: Push branch
-        if: steps.verify_branch.outputs.already_exists != 'true'
-        run: |
-          set -euo pipefail
-          git push -u origin "$BRANCH_NAME"
-
-      - name: Comment branch link on issue
-        env:
-          ALREADY_EXISTS: ${{ steps.verify_branch.outputs.already_exists }}
-        run: |
-          set -euo pipefail
-          BRANCH_URL="https://github.com/${{ github.repository }}/tree/${BRANCH_NAME}"
-
-          if [ "$ALREADY_EXISTS" = "true" ]; then
-            cat > /tmp/issue_comment.md << CMEOF
-          The branch already exists. Delete the existing branch first before creating a new one. Skipping branch creation.
-
-          ${BRANCH_URL}
+          cat > /tmp/issue_comment.md << CMEOF
+          ### Verification:
+          Review the page:
+          - ${WEBOPS_URL}
           CMEOF
-          else
-            cat > /tmp/issue_comment.md << CMEOF
-          ### Summary:
-          - Created branch: ${BRANCH_NAME}
-          - Updated ${PAGE_SLUG}
-
-          The update branch is ready. Comment \`/pr\` on this issue to generate a pull request:
-          ${BRANCH_URL}
-          CMEOF
-          fi
 
           gh api repos/${{ github.repository }}/issues/comments/${COMMENT_ID} \
             -X PATCH \
@@ -228,13 +157,12 @@ jobs:
   # ── Job: Update comment on any failure ─────────────────────────────────────
   handle-failure:
     name: Handle Failure
-    needs: [parse-issue, check-path, create-branch]
+    needs: [parse-issue, check-path, webops-link]
     runs-on: ubuntu-latest
     if: >-
       failure() &&
       needs.parse-issue.outputs.comment_updated != 'true' &&
-      needs.check-path.outputs.comment_updated != 'true' &&
-      needs.create-branch.outputs.comment_updated != 'true'
+      needs.check-path.outputs.comment_updated != 'true'
     permissions:
       issues: write
     env:
