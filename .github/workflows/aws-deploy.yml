@@ -163,9 +163,12 @@ jobs:
         with:
           node-version: '20'
 
+      # Install outside the repo so node_modules never lands in the working tree
       - name: Install Sharp
         if: steps.detect.outputs.has_changes == 'true' && steps.detect.outputs.images != ''
-        run: npm install sharp
+        run: |
+          npm install --prefix "$RUNNER_TEMP/sharp" sharp
+          echo "NODE_PATH=$RUNNER_TEMP/sharp/node_modules" >> $GITHUB_ENV
 
       # ---------------------------
       # Convert images to WebP (skip existing .webp)
@@ -217,7 +220,7 @@ jobs:
           git config user.name "badges-action[bot]"
           git config user.email "badges-action[bot]@users.noreply.github.com"
 
-          git add -A
+          # WebPs are already staged by the convert step; `git add -A` would trip on sparse-checkout exclusions
           git commit -m "♻️ Synced WebP with source image changes" || echo "No WebP changes to commit"
 
           git pull origin $BRANCH --no-rebase || true
@@ -252,7 +255,7 @@ jobs:
           git config user.name "badges-action[bot]"
           git config user.email "badges-action[bot]@users.noreply.github.com"
 
-          git add -A
+          # Deletions are already staged by `git rm` in the previous step
           git commit -m "🗑️ Removed original PNG/JPG images after WebP conversion" || echo "No originals to delete"
 
           git pull origin $BRANCH --no-rebase || true
