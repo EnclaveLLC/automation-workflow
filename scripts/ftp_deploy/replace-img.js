@@ -14,10 +14,12 @@ function getFiles(dir) {
   const list = fs.readdirSync(dir);
 
   list.forEach(file => {
+    if ([".git", ".aw", "node_modules"].includes(file)) return;
     const filePath = path.join(dir, file);
-    const stat = fs.statSync(filePath);
+    const stat = fs.lstatSync(filePath); // lstat: don't follow (possibly dangling) symlinks
+    if (stat.isSymbolicLink()) return;
 
-    if (stat && stat.isDirectory()) {
+    if (stat.isDirectory()) {
       results = results.concat(getFiles(filePath));
     } else if (/\.(html|php)$/i.test(file)) {
       results.push(filePath);
