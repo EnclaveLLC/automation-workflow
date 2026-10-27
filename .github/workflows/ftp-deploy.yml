@@ -216,6 +216,14 @@ jobs:
           git push origin HEAD:$BRANCH
 
       # ---------------------------------------------------------
+      # Recreate media-only folders
+      # ---------------------------------------------------------
+      # The sparse checkout skips media, so folders holding only images don't
+      # exist locally and the FTP action would delete them on the server.
+      - name: Recreate media-only folders
+        run: git ls-tree -r -d -z --name-only HEAD | xargs -0 -r mkdir -p
+
+      # ---------------------------------------------------------
       # Deploy Updated Files to FTP
       # ---------------------------------------------------------
       - name: Upload updated files to FTP
